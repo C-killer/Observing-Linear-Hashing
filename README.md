@@ -109,3 +109,20 @@ git push origin dev-<name>
 # GitHub：开 PR（dev 分支 → main）
 # 合并：Rebase and merge
 ```
+
+
+## 测试
+
+### 环境要求
+
+Python ≥ 3.10 并且已经安装pytest
+
+### 运行测试
+
+```
+# 在项目根目录执行
+pytest
+
+# 或只运行某个测试文件
+pytest tests/test_sampling.py
+```
