@@ -52,6 +52,43 @@ def sample_Hamming_weight(u: int, k: int, rng: random.Random) -> int:
         x |= (1 << i)
     return x
 
+def sample_Markov(u: int, p0: float, p1: float, rng: random.Random) -> int:
+    """
+    Markov chain over bits:
+    P(bit_0=1)=0.5
+    P(bit_i=1 | bit_{i-1}) = p0
+    P(bit_i=0 | bit_{i-1}) = p1
+
+    Returns x as an int with u bits.
+    """
+    _check_u(u)
+    if not (0.0 <= p0 <= 1.0):
+        raise ValueError(f"p must be in [0,1], got {p0}.")
+    if not (0.0 <= p1 <= 1.0):
+        raise ValueError(f"p must be in [0,1], got {p1}.")
+    x = 0
+    # first bit
+    if rng.random() < 0.5:
+        x |= 1
+        prev_bit = 1
+    else:
+        prev_bit = 0
+    # remaining bits
+    for i in range(1, u):
+        r = rng.random()
+        if prev_bit == 1:
+            if r <= p0:
+                x |= (1 << i)
+                prev_bit = 1
+            else:
+                prev_bit = 0
+        else:
+            if r <= p1:
+                x |= (1 << i)
+                prev_bit = 1
+            else:
+                prev_bit = 0
+    return x
 
 # ---------------------------
 #         Dispatcher
@@ -62,7 +99,8 @@ Sampler = Callable[..., int]
 _SAMPLERS: Dict[str, Sampler] = {
     "uniform": sample_uniform,
     "bernoulli": sample_bernoulli,
-    "Hamming_weight": sample_Hamming_weight
+    "Hamming_weight": sample_Hamming_weight,
+    "Markov": sample_Markov
 }
 
 def get_sample_x(u: int, rng: random.Random, dist: str, **params: Any) -> int:

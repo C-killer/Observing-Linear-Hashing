@@ -55,6 +55,7 @@ def main() -> None:
     demo_with_fixed_M(h, "uniform", u, l, seed_x=seed_x_base + 1)
     demo_with_fixed_M(h, "bernoulli", u, l, seed_x=seed_x_base + 2, p=0.8)
     demo_with_fixed_M(h, "Hamming_weight", u, l, seed_x=seed_x_base + 3, k=3)
+    demo_with_fixed_M(h, "Markov", u, l, seed_x=seed_x_base + 4, p0=0.3, p1=0.9)
 
 
 if __name__ == "__main__":
