@@ -71,4 +71,6 @@ def get_sample_x(u: int, rng: random.Random, dist: str, **params: Any) -> int:
     dist: one of {"uniform","bernoulli","Hamming_weight"}.
     params: distribution parameters (e.g., p=..., k=...).
     """
+    if dist not in _SAMPLERS:
+        raise ValueError(f"Unknown distribution '{dist}'. Supported: {list(_SAMPLERS.keys())}.")
     return _SAMPLERS[dist](u=u, rng=rng, **params)
