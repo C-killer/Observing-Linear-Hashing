@@ -110,7 +110,6 @@ git push origin dev-<name>
 # 合并：Rebase and merge
 ```
 
-
 ## 测试
 
 ### 环境要求
@@ -125,4 +124,13 @@ pytest
 
 # 或只运行某个测试文件
 pytest tests/test_sampling.py
+```
+
+### 运行示例
+
+在 `tests/example.py` 中，打印了在该算法下 `x, M, h(x)` 结果的示例
+
+```
+# 在项目根目录运行
+python3 tests/example.py
 ```
