@@ -58,7 +58,7 @@ if __name__ == "__main__":
     rng = random.Random(123)
     S = make_S(m=m, u=u, rng=rng, dist="Markov", p0=0.9, p1=0.1)
 
-    # 扫一组 r（你可以改）
+    
     r_values = [1.5, 2, 3, 4, 5, 6, 8, 10]
 
     probs = []
