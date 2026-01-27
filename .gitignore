@@ -7,3 +7,15 @@ __pycache__/
 
 # macOS
 .DS_Store
+
+# Python virtual environment
+.venv/
+venv/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# OS / editor
+.DS_Store
+.vscode/
