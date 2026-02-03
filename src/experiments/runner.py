@@ -132,50 +132,12 @@ def run_experiment_grid(
     return results
 
 if __name__ == "__main__":
-    # u = 50
-    # l = 16
-    # m = 1 << l
-    # trials = 200
+    u_values = [30]                 
+    l_values = [16]         
+    r_values = [3,4,5,6,7,8]
 
-    # rng = random.Random(42)
-    # S = make_S(m=m, u=u, rng=rng, dist="uniform")
-
-    
-    # r_values = [1.0, 1.2, 1.4, 1.6, 1.8, 2.0]
-
-    # probs = []
-    # for r in r_values:
-    #     p_hat = estimate_prob_fixed_S(S, u=u, l=l, r=r, trials=trials, seed=42)
-    #     probs.append(p_hat)
-    #     print(f"r={r:4}  p_hat={p_hat:.4e}  1/r^2={1/(r*r):.4e}")
-
-    # plot_tail_probability(r_values, probs)
-    # u = 32
-    # l_values = [12, 14, 16]
-
-    # r_values = [1.2, 1.4, 1.6, 1.8, 2.0,3.0]
-    # trials = 300
-    # m_factor = 1.0   # m = 2^l
-
-    # results = profile_fixed_u_over_l(
-    #     u=u,
-    #     l_values=l_values,
-    #     r_values=r_values,
-    #     m_factor=m_factor,
-    #     trials=trials,
-    #     seed=123,
-    # )
-
-    # plot_profile_over_l(results, r_values)
-    
-
-   #32
-    u_values = [25]                 
-    l_values = [10,12,14,18]         
-    r_values = [2,4,6,8]
-
-    trials = 200
-    m_factor = 1.0                  # m = 2^l
+    trials = 1000
+    m_factor = 1.4                  # m(initial) = 2^l
     seed = 123
 
     dist = "uniform"
