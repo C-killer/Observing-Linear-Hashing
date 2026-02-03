@@ -16,11 +16,7 @@ def make_S(m: int, u: int, rng: random.Random, dist: str, **params) -> list[int]
     # m -> number of s
     return [sampling.get_sample_x(u=u, rng=rng, dist=dist, **params) for _ in range(m)]
 
-<<<<<<< HEAD
-# for trails h, calculate the number of probability exceed threshold.
-=======
 # for trails times, calculate the number of probability exceed threshold.
->>>>>>> 373cc94 (experiment initial)
 def estimate_prob_fixed_S(S: list[int], u: int, l: int, r: float, trials: int, seed: int = 0) -> float:
     rng = random.Random(seed)
     T = threshold(l, r)
