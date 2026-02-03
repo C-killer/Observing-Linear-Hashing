@@ -24,7 +24,7 @@ class Maxload:
             y = self.h.h(x)
             counts[y] += 1
         return dict(counts)
-    
+    #返回最大桶
     def max_load(self, S):
         counts = self.compute_counts(S)
         return max(counts.values(), default=0)

@@ -5,14 +5,18 @@ from src.hashing.linear_f2 import hash_f2
 from src.experiments.maxload import Maxload
 import matplotlib.pyplot as plt
 
+
+#r * logn/loglogn
 def threshold(l: int, r: float) -> int:
     n = 1 << l
     return math.ceil(r * math.log(n) / math.log(math.log(n)))
 
 
 def make_S(m: int, u: int, rng: random.Random, dist: str, **params) -> list[int]:
+    # m -> number of s
     return [sampling.get_sample_x(u=u, rng=rng, dist=dist, **params) for _ in range(m)]
 
+# for trails times, calculate the number of probability exceed threshold.
 def estimate_prob_fixed_S(S: list[int], u: int, l: int, r: float, trials: int, seed: int = 0) -> float:
     rng = random.Random(seed)
     T = threshold(l, r)
@@ -25,6 +29,33 @@ def estimate_prob_fixed_S(S: list[int], u: int, l: int, r: float, trials: int, s
             exceed += 1
 
     return exceed / trials
+
+def plot_profile_over_l(results, r_values):
+    plt.figure(figsize=(7, 5))
+
+    
+    for l, probs in results.items():
+        plt.plot(r_values, probs, marker="o", label=f"l={l}")
+
+    
+    theory = [1 / (r * r) for r in r_values]
+    plt.plot(
+        r_values,
+        theory,
+        linestyle="--",
+        color="black",
+        linewidth=2,
+        label="theory: 1/r²"
+    )
+
+    plt.xlabel("r")
+    plt.ylabel("P[max-load ≥ r · log n / log log n]")
+    plt.yscale("log")   
+    plt.grid(True, which="both", linestyle="--", alpha=0.5)
+    plt.legend()
+    plt.tight_layout()
+    plt.show()
+
 
 
 
@@ -43,28 +74,128 @@ def plot_tail_probability(r_values, probs):
     plt.grid(True, which="both")
     plt.show()
 
+# main interface for use: 
+def run_experiment_grid(
+    *,
+    u_values: list[int],
+    l_values: list[int],
+    r_values: list[float],
+    m_factor: float,
+    trials: int,
+    dist: str,
+    dist_params: dict,
+    seed: int = 0,
+):
+    """
+    - u_values: groupe of u
+    - l_values: groupe of l
+    - r_values: groupe of r
+    - m = m_factor * 2^l == number of the blocks of the hashtable
+    - dist / dist_params: the generation of the S
+    - trials: 
+    """
+
+    rng = random.Random(seed)
+    results = {}  
+    # results[(u,l)][r] = p_hat
+
+    for u in u_values:
+        for l in l_values:
+            n = 1 << l
+            m = int(m_factor * n)
+
+            print(f"\n=== u={u}, l={l}, m={m}, dist={dist} ===")
+            #fix S, the same S for the whole round
+            S = make_S(
+                m=m,
+                u=u,
+                rng=rng,
+                dist=dist,
+                **dist_params,
+            )
+
+            curve = {}
+            for r in r_values:
+                p_hat = estimate_prob_fixed_S(
+                    S=S,
+                    u=u,
+                    l=l,
+                    r=r,
+                    trials=trials,
+                    seed=rng.randrange(1 << 30),
+                )
+                curve[r] = p_hat
+                print(f"  r={r:4.2f}  p_hat={p_hat:.4e}")
+
+            results[(u, l)] = curve
+
+    return results
+
 if __name__ == "__main__":
-    u = 32
-    l = 16
-    m = 1 << l
-    trials = 100
-    r = 6.0
+    # u = 50
+    # l = 16
+    # m = 1 << l
+    # trials = 200
 
-    # rng = random.Random(123)
-    # S = make_S(m=m, u=u, rng=rng, dist="Markov", p0=0.9, p1=0.1)  # 也可以 uniform/bernoulli
-
-    # p_hat = estimate_prob_fixed_S(S, u=u, l=l, r=r, trials=trials, seed=999)
-    # print("p_hat =", p_hat, "  bound 1/r^2 =", 1/(r*r))
-    rng = random.Random(123)
-    S = make_S(m=m, u=u, rng=rng, dist="Markov", p0=0.9, p1=0.1)
+    # rng = random.Random(42)
+    # S = make_S(m=m, u=u, rng=rng, dist="uniform")
 
     
-    r_values = [1.5, 2, 3, 4, 5, 6, 8, 10]
+    # r_values = [1.0, 1.2, 1.4, 1.6, 1.8, 2.0]
 
-    probs = []
-    for r in r_values:
-        p_hat = estimate_prob_fixed_S(S, u=u, l=l, r=r, trials=trials, seed=999)
-        probs.append(p_hat)
-        print(f"r={r:4}  p_hat={p_hat:.4e}  1/r^2={1/(r*r):.4e}")
+    # probs = []
+    # for r in r_values:
+    #     p_hat = estimate_prob_fixed_S(S, u=u, l=l, r=r, trials=trials, seed=42)
+    #     probs.append(p_hat)
+    #     print(f"r={r:4}  p_hat={p_hat:.4e}  1/r^2={1/(r*r):.4e}")
 
-    plot_tail_probability(r_values, probs)
+    # plot_tail_probability(r_values, probs)
+    # u = 32
+    # l_values = [12, 14, 16]
+
+    # r_values = [1.2, 1.4, 1.6, 1.8, 2.0,3.0]
+    # trials = 300
+    # m_factor = 1.0   # m = 2^l
+
+    # results = profile_fixed_u_over_l(
+    #     u=u,
+    #     l_values=l_values,
+    #     r_values=r_values,
+    #     m_factor=m_factor,
+    #     trials=trials,
+    #     seed=123,
+    # )
+
+    # plot_profile_over_l(results, r_values)
+    
+
+   #32
+    u_values = [25]                 
+    l_values = [10,12,14,18]         
+    r_values = [2,4,6,8]
+
+    trials = 200
+    m_factor = 1.0                  # m = 2^l
+    seed = 123
+
+    dist = "uniform"
+    dist_params = {}                
+
+
+    results = run_experiment_grid(
+        u_values=u_values,
+        l_values=l_values,
+        r_values=r_values,
+        m_factor=m_factor,
+        trials=trials,
+        dist=dist,
+        dist_params=dist_params,
+        seed=seed,
+    )
+    # results 的 key 是 (u, l)
+    results_by_l = {
+        l: [results[(u_values[0], l)][r] for r in r_values]
+        for l in l_values
+    }
+
+    plot_profile_over_l(results_by_l, r_values)
