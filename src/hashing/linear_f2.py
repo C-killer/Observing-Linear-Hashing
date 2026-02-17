@@ -13,6 +13,7 @@ class HashF2Python :
         rng = random.Random(seed)
         self.M = [sampling.get_sample_x(u, rng, "uniform") for _ in range(l)]
 
+    # single
     def h(self, x: int) -> int :
         """ h(x) = M x over F2 """
         # check if x has u bits
@@ -26,6 +27,10 @@ class HashF2Python :
             prod = (M_i & x).bit_count() & 1  # dot product over F2
             res |= (prod << i)
         return res
+
+    # batch
+    def h_many(self, xs: list[int]) -> list[int]:
+        return [self.h(x) for x in xs]
 
 class HashF2Cpp:
 
@@ -66,7 +71,5 @@ def hash_f2(l: int, u: int, seed: int, has_cpp: bool = True):
     Prefer C++ backend if available and supported, else fall back to Python version.
     """
     if has_cpp:
-        print("cpp")
         return HashF2Cpp(l=l, u=u, seed=seed)
-    print("py")
     return HashF2Python(l=l, u=u, seed=seed)
