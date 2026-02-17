@@ -16,17 +16,20 @@ def make_S(m: int, u: int, rng: random.Random, dist: str, **params) -> list[int]
     # m -> number of s
     return [sampling.get_sample_x(u=u, rng=rng, dist=dist, **params) for _ in range(m)]
 
-# for trails times, calculate the number of probability exceed threshold.
+# for trails h, calculate the number of probability exceed threshold.
 def estimate_prob_fixed_S(S: list[int], u: int, l: int, r: float, trials: int, seed: int = 0) -> float:
     rng = random.Random(seed)
     T = threshold(l, r)
-    exceed = 0
+    exceed = 0.0
 
     for _ in range(trials):
         h = hash_f2(l=l, u=u, seed=rng.randrange(1 << 30))
-        ml = Maxload(u=u, l=l, h=h).max_load(S)
+        # ml = Maxload(u=u, l=l, h=h).max_load(S)
+        ml, _ = Maxload(u=u, l=l, h=h).max_load(S, k=50_000)
+
+
         if ml >= T:
-            exceed += 1
+            exceed += 1.0
 
     return exceed / trials
 
@@ -132,8 +135,8 @@ def run_experiment_grid(
     return results
 
 if __name__ == "__main__":
-    u_values = [30]                 
-    l_values = [16]         
+    u_values = [20]                 
+    l_values = [10]         
     r_values = [3,4,5,6,7,8]
 
     trials = 1000
