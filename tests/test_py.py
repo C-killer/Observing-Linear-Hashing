@@ -22,7 +22,7 @@ def bit_at(y: int, i: int) -> int:
 
 def test_M_rows_are_u_bit_ints_and_allow_zero():
     l, u = 64, 16
-    h = hash_f2(l=l, u=u, seed=123)
+    h = hash_f2(l=l, u=u, seed=123, has_cpp=False)
 
     assert len(h.M) == l
     for row in h.M:
@@ -32,7 +32,7 @@ def test_M_rows_are_u_bit_ints_and_allow_zero():
 
 def test_h_output_range_and_zero_vector():
     l, u = 12, 20
-    h = hash_f2(l=l, u=u, seed=42)
+    h = hash_f2(l=l, u=u, seed=42, has_cpp=False)
 
     y0 = h.h(0)
     assert y0 == 0  # linear map => h(0)=0
@@ -45,7 +45,7 @@ def test_h_output_range_and_zero_vector():
 
 def test_h_rejects_out_of_range_x():
     l, u = 5, 8
-    h = hash_f2(l=l, u=u, seed=7)
+    h = hash_f2(l=l, u=u, seed=7, has_cpp=False)
 
     with pytest.raises(ValueError):
         h.h(-1)
@@ -56,7 +56,7 @@ def test_h_rejects_out_of_range_x():
 
 def test_h_matches_rowwise_dot_product_parity_independent():
     l, u = 16, 32
-    h = hash_f2(l=l, u=u, seed=2026)
+    h = hash_f2(l=l, u=u, seed=2026, has_cpp=False)
 
     # Try a few representative x values.
     xs = [
@@ -79,7 +79,7 @@ def test_linearity_over_f2_xor():
     For linear maps over F2: h(x XOR y) == h(x) XOR h(y)
     """
     l, u = 20, 40
-    h = hash_f2(l=l, u=u, seed=999)
+    h = hash_f2(l=l, u=u, seed=999, has_cpp=False)
 
     pairs = [
         (0, 0),
@@ -97,8 +97,8 @@ def test_reproducibility_with_seed_same_params_same_M_and_same_hashes():
     l, u = 10, 25
     seed = 314159
 
-    h1 = hash_f2(l=l, u=u, seed=seed)
-    h2 = hash_f2(l=l, u=u, seed=seed)
+    h1 = hash_f2(l=l, u=u, seed=seed, has_cpp=False)
+    h2 = hash_f2(l=l, u=u, seed=seed, has_cpp=False)
 
     assert h1.M == h2.M
 
@@ -113,7 +113,7 @@ def test_different_seeds_usually_give_different_M():
     almost always produce a different matrix M.
     """
     l, u = 32, 64
-    h1 = hash_f2(l=l, u=u, seed=1)
-    h2 = hash_f2(l=l, u=u, seed=2)
+    h1 = hash_f2(l=l, u=u, seed=1, has_cpp=False)
+    h2 = hash_f2(l=l, u=u, seed=2, has_cpp=False)
 
     assert h1.M != h2.M

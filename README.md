@@ -134,3 +134,18 @@ pytest tests/test_sampling.py
 # 在项目根目录运行
 python3 tests/example.py
 ```
+
+## 构建C++模块
+
+### 编译
+
+```
+# 在根目录
+cd Observing-Linear-Hashing/
+cmake -S src/cpp -B src/cpp/build -DCMAKE_BUILD_TYPE=Release
+cmake --build src/cpp/build -j
+
+# 验证编译成功
+python3 -c "import fasthash; print(fasthash.__file__)"
+# 输出类似：Observing-Linear-Hashing/fasthash.cpython-313-darwin.so
+```
