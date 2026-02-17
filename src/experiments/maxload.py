@@ -47,7 +47,7 @@ class Maxload:
         self.h = h
 
     def max_load(
-        self, S: Iterable[int], k: int = 50_000
+        self, S: Iterable[int], k: int = 5_000
     ) -> Tuple[int, Dict[int, Tuple[int, int]]]:
         """
         Space-Saving + min-heap (tas min) avec suppression paresseuse (lazy deletion).
