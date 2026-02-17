@@ -16,3 +16,5 @@ venv/
 *.so
 
 cpp/build/
+# C++ build artifacts
+src/cpp/build/
