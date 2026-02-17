@@ -32,6 +32,25 @@ def bench(name: str, fn: Callable[[int], int], xs: List[int], warmup: int, repea
     ns_per_op = [(t * 1e9) / n for t in times]
     return statistics.median(ns_per_op), times
 
+def bench_batch(name: str, fn_many: Callable[[List[int]], List[int]], xs: List[int], warmup: int, repeats: int) -> Tuple[float, List[float]]:
+    """
+    fn_many takes the whole list once and returns list once.
+    Return (median_ns_per_op, times_sec_list)
+    """
+    for _ in range(warmup):
+        fn_many(xs)
+
+    times = []
+    n = len(xs)
+    for _ in range(repeats):
+        t0 = time.perf_counter_ns()
+        fn_many(xs)
+        t1 = time.perf_counter_ns()
+        times.append((t1 - t0) / 1e9)
+
+    ns_per_op = [(t * 1e9) / n for t in times]
+    return statistics.median(ns_per_op), times
+
 
 def format_times(times: List[float]) -> str:
     return ", ".join(f"{t:.6f}s" for t in times)
@@ -82,9 +101,26 @@ def main():
     cpp_median_ns, cpp_times = bench("cpp", cpp_fn, xs, args.warmup, args.repeats)
     cpp_mops = 1e3 / cpp_median_ns
     speedup = py_median_ns / cpp_median_ns if cpp_median_ns > 0 else float("inf")
-    print(f"\n[C++] times: {format_times(cpp_times)}")
-    print(f"[C++] median: {cpp_median_ns:.1f} ns/op  =>  {cpp_mops:.3f} M ops/s")
-    print(f"\nSpeedup (C++ over PY): {speedup:.2f}x")
+    print(f"\n[C++ Single] times: {format_times(cpp_times)}")
+    print(f"[C++Single] median: {cpp_median_ns:.1f} ns/op  =>  {cpp_mops:.3f} M ops/s")
+    print(f"\nSpeedup (C++ Single over PY): {speedup:.2f}x")
+
+    try:
+        cpp_hasher = HashF2Cpp(l=l, u=u, seed=args.seed)
+    except ModuleNotFoundError as e:
+        print("\n[C++] ERROR: cannot import 'fasthash'.")
+        print("      Fix by making fasthash visible to Python, e.g.:")
+        print("        export PYTHONPATH=\"$(pwd)/src/cpp/build:${PYTHONPATH}\"")
+        print("      or output the .so to project root and rebuild.")
+        raise
+
+    cpp_fn = cpp_hasher.h
+    cpp_median_ns, cpp_times = bench_batch("cpp", cpp_hasher.h_many, xs, args.warmup, args.repeats)
+    cpp_mops = 1e3 / cpp_median_ns
+    speedup = py_median_ns / cpp_median_ns if cpp_median_ns > 0 else float("inf")
+    print(f"\n[C++ Batch] times: {format_times(cpp_times)}")
+    print(f"[C++ Batch] median: {cpp_median_ns:.1f} ns/op  =>  {cpp_mops:.3f} M ops/s")
+    print(f"\nSpeedup (C++ Batch over PY): {speedup:.2f}x")
 
 
 if __name__ == "__main__":

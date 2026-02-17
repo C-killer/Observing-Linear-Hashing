@@ -28,7 +28,7 @@ static std::vector<uint64_t> pylong_to_u64_blocks(py::handle x, int u) {
                             nbytes,
                             /*little_endian=*/1,
                             /*is_signed=*/0,
-                              0) < 0) {
+                            0) < 0) {
         throw py::error_already_set();
     }
 
@@ -62,17 +62,33 @@ PYBIND11_MODULE(fasthash, m) {
     py::class_<LinearHash>(m, "LinearHash")
         .def(py::init<int, int, uint64_t>(), py::arg("l"), py::arg("u"), py::arg("seed"))
 
-        // Keep your old API if you want
+        // old API
         .def("hash", &LinearHash::hash, py::arg("x_blocks"),
              "Compute h(x) given x as little-endian uint64 blocks")
 
-        // New API: take Python int, return Python int
+        // single int API: take Python int, return Python int
         .def("hash_int",
              [](LinearHash& self, py::int_ x) -> py::int_ {
-                 auto blocks = pylong_to_u64_blocks(x, self.get_u());   // 需要你有 u() getter；没有就存 u 到 wrapper 里
+                 auto blocks = pylong_to_u64_blocks(x, self.get_u());
                  auto y_blocks = self.hash(blocks);
                  return u64_blocks_to_pylong(y_blocks);
              },
              py::arg("x"),
-             "Compute h(x) given x as a Python int, return Python int");
+             "Compute h(x) given x as a Python int, return Python int")
+
+        // batch int API (ONE boundary crossing)
+        .def("hash_many_int",
+             [](LinearHash& self, py::sequence xs) -> py::list {
+                 py::list out;
+                 // 逐个元素处理，但只跨边界一次；核心收益在这里
+                 for (py::handle item : xs) {
+                     py::int_ x = py::reinterpret_borrow<py::int_>(item);
+                     auto blocks = pylong_to_u64_blocks(x, self.get_u());
+                     auto y_blocks = self.hash(blocks);
+                     out.append(u64_blocks_to_pylong(y_blocks));
+                 }
+                 return out;
+             },
+             py::arg("xs"),
+             "Batch compute: xs(list[int]) -> list[int]");
 }
