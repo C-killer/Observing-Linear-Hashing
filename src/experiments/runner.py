@@ -135,11 +135,11 @@ def run_experiment_grid(
     return results
 
 if __name__ == "__main__":
-    u_values = [20]                 
-    l_values = [10]         
-    r_values = [3,4,5,6,7,8]
+    u_values = [200]                 
+    l_values = [20]         
+    r_values = [6,7,8]
 
-    trials = 100
+    trials = 10
     m_factor = 1.4                  # m(initial) = 2^l
     seed = 123
 
