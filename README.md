@@ -149,3 +149,21 @@ cmake --build src/cpp/build -j
 python3 -c "import fasthash; print(fasthash.__file__)"
 # 输出类似：Observing-Linear-Hashing/fasthash.cpython-313-darwin.so
 ```
+
+## 性能检测方法
+
+### CPU监测
+
+注意，这里需要用 **Python 3.13**
+
+```
+# CPU 火焰图
+sudo py-spy record -o profile.svg -- python -m src.experiments.runner
+open profile.svg
+```
+
+### 内存监测
+
+```
+python -m memray run -o memray.bin -m src.experiments.runner
+```
