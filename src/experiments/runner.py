@@ -257,21 +257,12 @@ def run_experiment_grid_Cpp(
 
 
 if __name__ == "__main__":
-<<<<<<< HEAD
     u_values = [3000]                 
     l_values = [30]         
     r_values =  [2.0, 2.3, 2.6, 2.9, 3.2, 3.5, 4.0]
 
     trials = 5000
     m_factor = 1.5           # m(initial) = 2^l
-=======
-    u_values = [30]                 
-    l_values = [16]         
-    r_values = [3,4,5,6,7,8]
-
-    trials = 1000
-    m_factor = 1.4                  # m(initial) = 2^l
->>>>>>> 3acd315 (moving modulos)
     seed = 123
 
     dist = "uniform"
