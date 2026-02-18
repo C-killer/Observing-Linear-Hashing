@@ -1,10 +1,12 @@
 import math
 import random
+import time
 from src.hashing import sampling
 from src.hashing.linear_f2 import hash_f2
 from src.experiments.maxload import Maxload
 import matplotlib.pyplot as plt
 
+import fasthash
 
 #r * logn/loglogn
 def threshold(l: int, r: float) -> int:
@@ -210,21 +212,64 @@ def run_experiment_grid_not_fixed_S(
 
     return results
 
+def run_experiment_grid_Cpp(
+    *,
+    u_values: list[int],
+    l_values: list[int],
+    r_values: list[float],
+    m_factor: float,
+    trials: int,
+    dist: str,
+    dist_params: dict,
+    seed: int = 0,
+):
+    rng = random.Random(seed)
+    results = {}
+
+    for u in u_values:
+        for l in l_values:
+            n = 1 << l
+            m = int(m_factor * n)
+
+            print(f"\n=== u={u}, l={l}, m={m}, dist={dist} ===")
+
+            thresholds = {r: threshold(l, r) for r in r_values}
+
+            seeds_S = [rng.randrange(1<<30) for _ in range(trials)]
+            seeds_h = [rng.randrange(1<<30) for _ in range(trials)]
+
+            start = time.time()
+            mls = fasthash.run_trials_maxload(u, l, m, dist, seeds_S, seeds_h, k=50_000, num_threads=10)
+            elapsed = time.time() - start
+            print(f"time: {elapsed:.2f}s, per_trial: {elapsed/trials*1000:.2f}ms")
+
+            curve = {}
+            for r in r_values:
+                T = thresholds[r]
+                exceed = sum(ml >= T for ml in mls)
+                p_hat = exceed / trials
+                curve[r] = p_hat
+                print(f"  r={r:4.2f}  T={T}  exceed={exceed}  p_hat={p_hat:.8e}")
+
+            results[(u, l)] = curve
+
+    return results
+
 
 if __name__ == "__main__":
-    u_values = [1000]                 
-    l_values = [100]         
-    r_values = [5,6,7,8]
+    u_values = [3000]                 
+    l_values = [30]         
+    r_values =  [2.0, 2.3, 2.6, 2.9, 3.2, 3.5, 4.0]
 
-    trials = 10
-    m_factor = 1.4                  # m(initial) = 2^l
+    trials = 5000
+    m_factor = 1.5           # m(initial) = 2^l
     seed = 123
 
     dist = "uniform"
     dist_params = {}                
 
 
-    results = run_experiment_grid_not_fixed_S(
+    results = run_experiment_grid_Cpp(
         u_values=u_values,
         l_values=l_values,
         r_values=r_values,
