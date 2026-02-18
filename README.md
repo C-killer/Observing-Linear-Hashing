@@ -157,6 +157,12 @@ python3 -c "import fasthash; print(fasthash.__file__)"
 注意，这里需要用 **Python 3.13**
 
 ```
+python3 -m venv .venv313
+source .venv313/bin/activate
+python -V   # 确认是 3.13.x
+```
+
+```
 # CPU 火焰图
 sudo py-spy record -o profile.svg -- python -m src.experiments.runner
 open profile.svg
