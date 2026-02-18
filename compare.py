@@ -147,6 +147,31 @@ def main():
     print(f"C++ single over PY batch : {safe_speedup(py_batch_ns, cpp_single_ns):.2f}x")
     print(f"C++ batch  over PY batch : {safe_speedup(py_batch_ns, cpp_batch_ns):.2f}x")
 
+    # Multi-threaded C++ trial benchmark
+    print("\n=== C++ Multi-threaded Trials ===")
+    import fasthash
+
+    trial_n = 200  # number of trials
+    trial_m = 1 << l  # m = 2^l
+    trial_rng = random.Random(args.seed)
+    seeds_S = [trial_rng.randrange(1 << 30) for _ in range(trial_n)]
+    seeds_h = [trial_rng.randrange(1 << 30) for _ in range(trial_n)]
+
+    for num_threads in [1, 4, 8, 10]:
+        times_mt = []
+        for _ in range(args.repeats):
+            t0 = time.perf_counter_ns()
+            fasthash.run_trials_maxload(
+                u, l, trial_m, "uniform",
+                seeds_S, seeds_h,
+                k=50000,
+                num_threads=num_threads,
+            )
+            t1 = time.perf_counter_ns()
+            times_mt.append((t1 - t0) / 1e9)
+        med = statistics.median(times_mt)
+        print(f"  threads={num_threads:2d}  median={med:.4f}s  per_trial={med/trial_n*1000:.2f}ms")
+
 
 if __name__ == "__main__":
     main()
