@@ -31,9 +31,20 @@
 
 from __future__ import annotations
 
-from typing import Dict, Iterable, Tuple, Any, List
+from typing import Dict, Iterable, Iterator, Tuple, Any, List
 import heapq
 
+
+def _chunked(iterable: Iterable[int], chunk_size: int) -> Iterator[List[int]]:
+    """Yield lists of at most chunk_size items from an iterable."""
+    buf: List[int] = []
+    for x in iterable:
+        buf.append(x)
+        if len(buf) >= chunk_size:
+            yield buf
+            buf = []
+    if buf:
+        yield buf
 
 """
  把 “精确统计 2^l 个桶的计数” 换成 “只追踪最可能成为最大桶的少数候选桶”，用的是经典的 Space-Saving / Frequent algorithm(重频项近似) 
@@ -45,7 +56,8 @@ import heapq
 class Maxload:
     """
     M(S,h) = max_y |{x in S : h(x)=y}|
-    - h : objet avec une méthode h(x:int)->int。
+    - h : objet avec une méthode h(x:int)->int;
+        optionally method h_many(xs:list[int])->list[int] for batch hashing
     """
 
     def __init__(self, u: int, l: int, h: Any) -> None:
@@ -54,10 +66,12 @@ class Maxload:
         self.h = h
 
     def max_load(
-        self, S: Iterable[int], k: int = 50_000
+        self, S: Iterable[int], k: int = 50_000, *, chunk_size: int = 16_384,
     ) -> Tuple[int, Dict[int, Tuple[int, int]]]:
         """
         Space-Saving + min-heap (tas min) avec suppression paresseuse (lazy deletion).
+        chunk_size = 8192 / 16384 / 32768 ...
+            固定 u/l/k, 跑 4096/8192/16384/32768/65536, 看 wall time, 选最小的那个
 
         On maintient:
           - table[y] = (c, e) : c = compteur, e = erreur
@@ -91,23 +105,20 @@ class Maxload:
                 cur = table.get(y_min)
                 if cur is not None and cur[0] == c_min:
                     return c_min, y_min
-                # sinon, entrée obsolète -> on continue
 
-        for x in S:
-            y = self.h.h(x)
-
+        def process_y(y: int) -> None :
             # Cas 1 : y déjà suivi
             if y in table:
                 c, e = table[y]
                 table[y] = (c + 1, e)
                 push_state(y)
-                continue
+                return
 
             # Cas 2 : place disponible
             if len(table) < k:
                 table[y] = (1, 0)
                 push_state(y)
-                continue
+                return
 
             # Cas 3 : table pleine -> remplacer l'entrée minimale
             c_min, y_min = pop_min_valid()
@@ -118,6 +129,22 @@ class Maxload:
             # Insérer y en héritant de c_min comme "erreur"
             table[y] = (c_min + 1, c_min)
             push_state(y)
+
+        # --- hash stream generation (single vs batch) ---
+        h_many = getattr(self.h, "h_many", None)
+        use_batch = callable(h_many)
+
+        if use_batch:
+            # Batch path: iterate S in chunks, call h_many once per chunk
+            for xs_chunk in _chunked(S, chunk_size):
+                ys_chunk = h_many(xs_chunk)  # type: ignore[misc]
+                for y in ys_chunk:
+                    process_y(int(y))
+        else:
+            # Single path
+            for x in S:
+                y = self.h.h(x)
+                process_y(int(y))
 
         ub_tracked = 0
         for c, _e in table.values():

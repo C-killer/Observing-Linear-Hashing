@@ -44,8 +44,7 @@ class HashF2Cpp:
     
     # batch
     def h_many(self, xs: list[int]) -> list[int]:
-        ys = self._core.hash_many_int(xs)
-        return [int(y) for y in ys]
+        return self._core.hash_many_int(xs)
     
 def blocks_to_int(blocks):
     x = 0

@@ -16,6 +16,12 @@ def make_S(m: int, u: int, rng: random.Random, dist: str, **params) -> list[int]
     # m -> number of s
     return [sampling.get_sample_x(u=u, rng=rng, dist=dist, **params) for _ in range(m)]
 
+def make_S_iter(m: int, u: int, seed: int, dist: str, **params):
+    rng = random.Random(seed)
+    for _ in range(m):
+        yield sampling.get_sample_x(u=u, rng=rng, dist=dist, **params)
+
+
 # for trails h, calculate the number of probability exceed threshold.
 def estimate_prob_fixed_S(S: list[int], u: int, l: int, r: float, trials: int, seed: int = 0) -> float:
     rng = random.Random(seed)
@@ -25,7 +31,9 @@ def estimate_prob_fixed_S(S: list[int], u: int, l: int, r: float, trials: int, s
     for _ in range(trials):
         h = hash_f2(l=l, u=u, seed=rng.randrange(1 << 30))
         # ml = Maxload(u=u, l=l, h=h).max_load(S)
-        ml, _ = Maxload(u=u, l=l, h=h).max_load(S, k=50_000)
+        # ml, _ = Maxload(u=u, l=l, h=h).max_load(S, k=50_000)
+        ml, _ = Maxload(u=u, l=l, h=h).max_load(S, k=50_000, chunk_size=16384)
+
 
 
         if ml >= T:
@@ -134,12 +142,81 @@ def run_experiment_grid(
 
     return results
 
-if __name__ == "__main__":
-    u_values = [200]                 
-    l_values = [20]         
-    r_values = [6,7,8]
+def run_experiment_grid_not_fixed_S(
+    *,
+    u_values: list[int],
+    l_values: list[int],
+    r_values: list[float],
+    m_factor: float,
+    trials: int,
+    dist: str,
+    dist_params: dict,
+    seed: int = 0,
+):
 
-    trials = 1000
+    rng = random.Random(seed)
+    results = {}
+
+    for u in u_values:
+        for l in l_values:
+            n = 1 << l
+            m = int(m_factor * n)
+
+            print(f"\n=== u={u}, l={l}, m={m}, dist={dist} ===")
+
+            # 初始化统计
+            exceed = {r: 0.0 for r in r_values}
+            thresholds = {r: threshold(l, r) for r in r_values}
+
+            for t in range(trials):
+
+                # --- 每个 trial 新的 seed ---
+                seed_S = rng.randrange(1 << 30)
+                seed_h = rng.randrange(1 << 30)
+
+                # 生成新的 S（generator）
+                S_iter = make_S_iter(
+                    m=m,
+                    u=u,
+                    seed=seed_S,
+                    dist=dist,
+                    **dist_params,
+                )
+
+                # 新 hash
+                h = hash_f2(l=l, u=u, seed=seed_h)
+
+                # 只算一次 max-load
+                ml, _ = Maxload(u=u, l=l, h=h).max_load(
+                    S_iter,
+                    k=50_000,
+                    chunk_size=65536,  # 4096/8192/16384/32768/65536
+                )
+
+                # 对所有 r 判阈值
+                for r in r_values:
+                    if ml >= thresholds[r]:
+                        exceed[r] += 1.0
+
+            # 计算概率
+            curve = {}
+            for r in r_values:
+                p_hat = exceed[r] / trials
+                curve[r] = p_hat
+                print(f"  r={r:4.2f}  p_hat={p_hat:.8e}")
+                print(f"  exceed={exceed[r]:.4e}")
+
+            results[(u, l)] = curve
+
+    return results
+
+
+if __name__ == "__main__":
+    u_values = [1000]                 
+    l_values = [100]         
+    r_values = [5,6,7,8]
+
+    trials = 10
     m_factor = 1.4                  # m(initial) = 2^l
     seed = 123
 
@@ -147,7 +224,7 @@ if __name__ == "__main__":
     dist_params = {}                
 
 
-    results = run_experiment_grid(
+    results = run_experiment_grid_not_fixed_S(
         u_values=u_values,
         l_values=l_values,
         r_values=r_values,
@@ -157,6 +234,7 @@ if __name__ == "__main__":
         dist_params=dist_params,
         seed=seed,
     )
+    
     # results 的 key 是 (u, l)
     results_by_l = {
         l: [results[(u_values[0], l)][r] for r in r_values]
