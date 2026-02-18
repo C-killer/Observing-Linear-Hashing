@@ -13,6 +13,8 @@ public:
     // Return output also as little-endian uint64 blocks
     std::vector<uint64_t> hash(const std::vector<uint64_t>& x_blocks) const;
     int get_u() {return u;}
+    int get_l() const { return l; }
+    uint32_t hash_u32(const std::vector<uint64_t>& x_blocks) const;  // support l<=32 only
 
 private:
     int l;                 // output bits

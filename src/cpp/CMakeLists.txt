@@ -10,6 +10,7 @@ find_package(pybind11 CONFIG REQUIRED)
 pybind11_add_module(fasthash
   bindings.cpp
   linear_hash.cpp
+  trial_maxload.cpp
 )
 
 # 放在这里：target 已经存在了

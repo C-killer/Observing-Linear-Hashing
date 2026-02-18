@@ -3,6 +3,7 @@
 #include <Python.h>  // PyLong_AsUnsignedLongLongMask, etc.
 
 #include "linear_hash.hpp"
+#include "parallel_trials.hpp"
 
 namespace py = pybind11;
 
@@ -91,4 +92,22 @@ PYBIND11_MODULE(fasthash, m) {
              },
              py::arg("xs"),
              "Batch compute: xs(list[int]) -> list[int]");
+    
+    m.def("run_trials_maxload",
+          [](int u, int l, int64_t m_count,
+             const std::string& dist,
+             const std::vector<uint64_t>& seeds_S,
+             const std::vector<uint64_t>& seeds_h,
+             int k,
+             int num_threads) {
+              // 释放 GIL：C++ 多线程计算期间不占用 Python GIL
+              py::gil_scoped_release release;
+              return run_trials_parallel(u, l, m_count, dist, seeds_S, seeds_h, k, num_threads);
+          },
+          py::arg("u"), py::arg("l"), py::arg("m"),
+          py::arg("dist"),
+          py::arg("seeds_S"), py::arg("seeds_h"),
+          py::arg("k") = 50000,
+          py::arg("num_threads") = 0
+    );
 }

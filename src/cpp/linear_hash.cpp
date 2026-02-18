@@ -59,3 +59,19 @@ LinearHash::hash(const std::vector<uint64_t>& x_blocks) const
 
     return y;
 }
+
+uint32_t LinearHash::hash_u32(const std::vector<uint64_t>& x_blocks) const {
+    if (l > 32) throw std::invalid_argument("hash_u32 requires l<=32");
+    if ((int)x_blocks.size() != num_in_blocks) throw std::invalid_argument("x_blocks size mismatch");
+
+    uint32_t y = 0;
+    for (int i = 0; i < l; ++i) {
+        uint64_t parity = 0ULL;
+        for (int b = 0; b < num_in_blocks; ++b) {
+            uint64_t v = rows[i][b] & x_blocks[b];
+            parity ^= (__builtin_popcountll(v) & 1ULL);
+        }
+        if (parity & 1ULL) y |= (1u << i);
+    }
+    return y;
+}
