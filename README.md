@@ -1,175 +1,243 @@
 # Observing-Linear-Hashing
+UE Projet STL (PSTL) - MU4IN508
 
- l'UE Projet STL (PSTL) - MU4IN508
-
-## Rapport
-
- https://www.overleaf.com/8127484713dywzfygnjrkx#8a671a
-
-## 开发规范
-
-### 总原则
-
- 本 Projet 的规范大致遵循：仓库 main 受保护、无 CI、无审批、合并方式倾向 rebase。主要遵循以下几点：
-
-1. 禁止直接向 main 分支 push（已启用分支保护）；
-2. 所有代码修改必须在个人分支/功能分支完成，并通过 Pull Request（PR） 合并到 main；
-3. 合并方式统一使用 Rebase（Rebase and merge）。
-
-### 分支规则
-
-main：稳定分支，仅用于集成，禁止直接开发与 push。
-
-开发分支：每位成员在自己的分支上工作
-
-不允许在 main 上直接 commit；本地误提交也不得通过绕过规则推送。
-
-### 首次使用（每位成员仅需做一次）
+## Structure du projet
 
 ```
-# 克隆仓库
+Observing-Linear-Hashing/
+├── src/
+│   ├── hashing/
+│   │   ├── linear_f2.py       # Implémentation du hachage linéaire sur F2 (Python et C++)
+│   │   └── sampling.py        # Générateurs de vecteurs aléatoires (uniforme, Bernoulli,
+│   │                          #   poids de Hamming, Markov)
+│   ├── experiments/
+│   │   ├── runner.py          # Point d'entrée principal des expériences ;
+│   │   │                      #   grilles de paramètres (u, l, r, m), estimation de
+│   │   │                      #   P[max-load ≥ T(r)] en Python pur ou via le module C++
+│   │   ├── maxload.py         # Algorithme Space-Saving (Python) pour estimer le max-load
+│   │   │                      #   en mémoire O(k) avec un tas min paresseux
+│   │   └── mlShower.py        # Script rapide : lance des trials C++ et affiche la
+│   │                          #   distribution du max-load
+│   ├── viz/
+│   │   └── plot.py            # Fonctions de visualisation (courbes empiriques vs théorie)
+│   └── cpp/
+│       ├── linear_hash.hpp/cpp      # Hachage linéaire F2 en C++ (arithmétique bit-à-bit,
+│       │                            #   blocs uint64)
+│       ├── trial_maxload.hpp/cpp    # Un trial : génère S, calcule h(x) pour chaque x,
+│       │                            #   estime le max-load via Space-Saving C++
+│       ├── space_saving.hpp         # Algorithme Space-Saving C++ (tas min paresseux,
+│       │                            #   clé uint64 par fingerprint)
+│       ├── parallel_trials.hpp      # Parallélisation des trials via std::thread
+│       ├── samplers.hpp             # Génération de vecteurs aléatoires en C++
+│       ├── bindings.cpp             # Bindings pybind11 : expose LinearHash et
+│       │                            #   run_trials_maxload à Python
+│       └── CMakeLists.txt           # Configuration de compilation du module fasthash
+├── tests/
+│   ├── conftest.py         # Fixtures partagées pytest
+│   ├── test_sampling.py    # Tests unitaires pour les distributions d'échantillonnage
+│   ├── test_py.py          # Tests du hachage Python
+│   ├── test_cpp.py         # Tests du module C++ fasthash
+│   └── example.py          # Exemple : affiche x, M, h(x)
+├── compare.py                   # Benchmark Python vs C++ : débit (ns/op, M ops/s),
+│                                #   speedup single/batch, trials multi-threadés
+├── DD22.pdf                     # Référence bibliographique
+├── JKZ25.pdf                    # Référence bibliographique
+├── TZ23.pdf                     # Référence bibliographique
+├── Observing_Linear_Hashing.pdf # Rapport du projet
+└── .gitignore
+```
+
+## Conventions de développement
+
+### Principes généraux
+
+Les conventions de ce projet sont les suivantes : la branche `main` est protégée, sans CI, sans validation obligatoire, avec une préférence pour le rebase. Les règles principales sont :
+
+1. Il est interdit de pousser directement sur la branche `main` (protection de branche activée) ;
+2. Toutes les modifications de code doivent être effectuées sur une branche personnelle ou de fonctionnalité, puis intégrées à `main` via une Pull Request (PR) ;
+3. La méthode de fusion doit être uniformément **Rebase (Rebase and merge)**.
+
+### Règles de branchement
+
+- `main` : branche stable, réservée à l'intégration — aucun développement direct ni push autorisé.
+- Branches de développement : chaque membre travaille sur sa propre branche.
+- Aucun commit direct sur `main` n'est autorisé ; les commits locaux faits par erreur ne doivent pas être poussés en contournant les règles.
+
+### Initialisation (à faire une seule fois par membre)
+
+```bash
+# Cloner le dépôt
 git clone https://github.com/C-killer/Observing-Linear-Hashing.git
 cd Observing-Linear-Hashing
 
-# 创建个人分支并推送到远程
-git checkout -b dev-<name>
-git push -u origin dev-<name>
+# Créer sa branche personnelle et la pousser sur le dépôt distant
+git checkout -b dev-<nom>
+git push -u origin dev-<nom>
 ```
 
-### 每次开始工作：先同步 main，再更新个人分支（必须执行）
+### Avant chaque session de travail : synchroniser `main`, puis mettre à jour sa branche (obligatoire)
 
-要求每次开始写代码前必须做一次同步，避免后期 PR 冲突集中爆发。
+Cette synchronisation est requise avant chaque début de développement afin d'éviter les conflits lors des PR.
 
-```
-# 同步远程 main 到本地
+```bash
+# Synchroniser le main distant en local
 git checkout main
 git pull origin main
 
-# 切回个人分支并 rebase 到最新 main
-git checkout dev-<name>
+# Revenir sur sa branche et la rebaser sur le main à jour
+git checkout dev-<nom>
 git rebase main
 ```
 
-### 开发与提交（在个人分支完成）
+### Développement et commits (sur la branche personnelle)
 
-```
-# 开发过程中提交
+```bash
+# Commiter pendant le développement
 git add .
-git commit -m "xxx"  # 尽量写清楚你完成的工作
+git commit -m "xxx"  # Décrire clairement le travail effectué
 
-# 推送到远程个人分支（可多次）
-git push origin dev-<name>
+# Pousser sur la branche personnelle distante (peut être fait plusieurs fois)
+git push origin dev-<nom>
 ```
 
-### 完成工作：通过 PR 合并到 main（唯一允许进入 main 的方式）
+### Finaliser : fusionner dans `main` via PR (seule méthode autorisée)
 
-#### 1. 提 PR 前准备（必须）
+#### 1. Préparation avant la PR (obligatoire)
 
-```
-# 确保个人分支已同步最新 main：
+```bash
+# S'assurer que la branche personnelle est synchronisée avec le dernier main :
 git checkout main
 git pull origin main
-git checkout dev-<name>
+git checkout dev-<nom>
 git rebase main
 
-# 推送个人分支：
-git push origin dev-<name>
-# 如果你刚执行了 rebase，可能需要强推（仅对个人分支允许）：
-git push --force-with-lease origin dev-<name>
+# Pousser la branche personnelle :
+git push origin dev-<nom>
+
+# Si un rebase vient d'être effectué, un push forcé peut être nécessaire
+# (autorisé uniquement sur les branches personnelles) :
+git push --force-with-lease origin dev-<nom>
 ```
 
-#### 2. 在 GitHub 创建 Pull Request
+#### 2. Créer une Pull Request sur GitHub
 
-Base：main
+- **Base :** `main`
+- **Compare :** `dev-xxx`
+- La description de la PR doit inclure :
+  - Le contenu des modifications (ce qui a été fait)
+  - La méthode de test / les résultats (le cas échéant)
 
-Compare：dev-xxx
+#### 3. Méthode de fusion (uniformisée)
 
-PR 描述需包含：
-    变更内容（做了什么）,自测方式/结果（如果有）
+Lors de la fusion d'une PR, sélectionner : **Rebase and merge**
 
-#### 3. 合并方式（必须统一）
+### Référence rapide (flux le plus courant)
 
-合并 PR 时选择：Rebase and merge
-
-### 快速流程速查（最常用）
-
-```
-# 开工
+```bash
+# Démarrer une session
 git checkout main
 git pull origin main
-git checkout dev-<name>
+git checkout dev-<nom>
 git rebase main
 
-# 提交与推送
+# Commiter et pousser
 git add .
 git commit -m "xxx"
-git push origin dev-<name>
+git push origin dev-<nom>
 
-# 提 PR 并 rebase 合并到 main
-# GitHub：开 PR（dev 分支 → main）
-# 合并：Rebase and merge
+# Ouvrir une PR et fusionner dans main
+# GitHub : créer une PR (branche dev → main)
+# Fusion : Rebase and merge
 ```
 
-## 测试
+---
 
-### 环境要求
+## Tests
 
-Python ≥ 3.10 并且已经安装pytest
+### Prérequis
 
-### 运行测试
+Python ≥ 3.10 et `pytest` installé.
 
-```
-# 在项目根目录执行
+### Lancer les tests
+
+```bash
+# Depuis la racine du projet
 pytest
 
-# 或只运行某个测试文件
+# Ou pour un fichier de test spécifique
 pytest tests/test_sampling.py
 ```
 
-### 运行示例
+### Exemple d'exécution
 
-在 `tests/example.py` 中，打印了在该算法下 `x, M, h(x)` 结果的示例
+Le fichier `tests/example.py` affiche des exemples de résultats `x, M, h(x)` avec cet algorithme.
 
-```
-# 在项目根目录运行
+```bash
+# Depuis la racine du projet
 python3 tests/example.py
 ```
 
-## 构建C++模块
+---
 
-### 编译
+## Compilation du module C++
 
-```
-# 在根目录
+### Compilation
+
+```bash
+# Depuis la racine
 cd Observing-Linear-Hashing/
 cmake -S src/cpp -B src/cpp/build -DCMAKE_BUILD_TYPE=Release
 cmake --build src/cpp/build -j
 
-# 验证编译成功
+# Vérifier que la compilation a réussi
 python3 -c "import fasthash; print(fasthash.__file__)"
-# 输出类似：Observing-Linear-Hashing/fasthash.cpython-313-darwin.so
+# Exemple de sortie : Observing-Linear-Hashing/fasthash.cpython-313-darwin.so
 ```
 
-## 性能检测方法
+---
 
-### CPU监测
+## Expériences
 
-注意，这里需要用 **Python 3.13**
+Les expériences permettent d'évaluer le comportement des fonctions de hachage
+linéaires dans le problème classique "balls into bins".
 
+### Lancer une expérience
+
+Depuis la racine du projet :
+
+```bash
+python -m src.experiments.runner
 ```
+
+---
+
+## Méthodes de profilage des performances
+
+### Profilage CPU
+
+> **Note :** Cette section nécessite **Python 3.13**.
+
+```bash
 python3 -m venv .venv313
 source .venv313/bin/activate
-python -V   # 确认是 3.13.x
+python -V   # Vérifier que la version est bien 3.13.x
 ```
 
-```
-# CPU 火焰图
+```bash
+# Génération d'un flamegraph CPU
 sudo py-spy record -o profile.svg -- python -m src.experiments.runner
 open profile.svg
 ```
 
-### 内存监测
+### Profilage mémoire
 
-```
+```bash
+# Étape 1 : collecter les données mémoire
 python -m memray run -o memray.bin -m src.experiments.runner
+
+# Étape 2 : générer le rapport flamegraph HTML
+python -m memray flamegraph memray.bin -o memray-flamegraph.html
+
+# Étape 3 : ouvrir le rapport dans le navigateur
+open memray-flamegraph.html
 ```
