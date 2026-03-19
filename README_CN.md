@@ -1,4 +1,6 @@
+
 # Observing-Linear-Hashing
+
 UE Projet STL (PSTL) - MU4IN508
 
 ## 项目结构
@@ -48,17 +50,17 @@ Observing-Linear-Hashing/
 
 ### 总原则
 
-本项目的规范大致遵循：仓库 `main` 受保护、无 CI、无审批、合并方式倾向 rebase。主要遵循以下几点：
+本项目的规范大致遵循：仓库** **`main` 受保护、无 CI、无审批、合并方式倾向 rebase。主要遵循以下几点：
 
-1. 禁止直接向 `main` 分支 push（已启用分支保护）；
-2. 所有代码修改必须在个人分支/功能分支完成，并通过 Pull Request（PR）合并到 `main`；
-3. 合并方式统一使用 **Rebase（Rebase and merge）**。
+1. 禁止直接向** **`main` 分支 push（已启用分支保护）；
+2. 所有代码修改必须在个人分支/功能分支完成，并通过 Pull Request（PR）合并到** **`main`；
+3. 合并方式统一使用** ** **Rebase（Rebase and merge）** 。
 
 ### 分支规则
 
-- `main`：稳定分支，仅用于集成，禁止直接开发与 push。
-- 开发分支：每位成员在自己的分支上工作。
-- 不允许在 `main` 上直接 commit；本地误提交也不得通过绕过规则推送。
+* `main`：稳定分支，仅用于集成，禁止直接开发与 push。
+* 开发分支：每位成员在自己的分支上工作。
+* 不允许在** **`main` 上直接 commit；本地误提交也不得通过绕过规则推送。
 
 ### 首次使用（每位成员仅需做一次）
 
@@ -117,11 +119,11 @@ git push --force-with-lease origin dev-<name>
 
 #### 2. 在 GitHub 创建 Pull Request
 
-- **Base：** `main`
-- **Compare：** `dev-xxx`
-- PR 描述需包含：
-  - 变更内容（做了什么）
-  - 自测方式/结果（如果有）
+* **Base：** `main`
+* **Compare：** `dev-xxx`
+* PR 描述需包含：
+  * 变更内容（做了什么）
+  * 自测方式/结果（如果有）
 
 #### 3. 合并方式（必须统一）
 
@@ -152,7 +154,7 @@ git push origin dev-<name>
 
 ### 环境要求
 
-Python ≥ 3.10 并且已安装 `pytest`。
+Python ≥ 3.10 并且已安装** **`pytest`。
 
 ### 运行测试
 
@@ -166,7 +168,7 @@ pytest tests/test_sampling.py
 
 ### 运行示例
 
-在 `tests/example.py` 中，打印了在该算法下 `x, M, h(x)` 结果的示例。
+在** **`tests/example.py` 中，打印了在该算法下** **`x, M, h(x)` 结果的示例。
 
 ```bash
 # 在项目根目录运行
@@ -206,11 +208,49 @@ python -m src.experiments.runner
 
 ---
 
+## Max-load 估计算法：Space-Saving
+
+### 算法说明
+
+实验的核心问题是估计 max-load，即将** **`m` 个球投入** **`2^l` 个桶后，最重桶的球数：
+
+```
+M(S, h) = max_y |{x ∈ S : h(x) = y}|
+```
+
+当** **`l` 较大时（例如** **`l=20`，桶数达 100 万），用完整哈希表精确统计每个桶的计数会导致内存不可承受（`O(2^l)`）。为此项目采用** ** **Space-Saving 算法** ，在** **`O(k)` 内存下近似估计 max-load。
+
+### 核心思路
+
+维护一张大小为** **`k` 的候选表** **`table[y] = (c, e)`，其中** **`c` 为计数估计，`e` 为误差上界，并用一个**惰性最小堆**追踪当前计数最小的候选桶。每次处理一个新的桶标识** **`y` 时：
+
+* 若** **`y` 已在候选表中：直接将其计数** **`c` 加一；
+* 若候选表未满：以** **`(c=1, e=0)` 插入；
+* 若候选表已满：从堆中弹出当前计数最小的候选** **`y_min`，将其替换为新的** **`y`，并继承** **`c_min` 作为误差，新计数为** **`c_min + 1`。
+
+最终通过** **`max_count()` 返回候选表中计数的最大值，作为 max-load 的上界估计。
+
+### 复杂度
+
+* 时间复杂度：`O(N log k)`（均摊），`N` 为输入流长度；
+* 空间复杂度：`O(k)`。
+
+### 适用场景
+
+`l` 较小时（如** **`l ≤ 10`，桶数 ≤ 1024），直接精确计数更快且无近似误差。Space-Saving 主要用于** ****`l` 较大、桶数远超可用内存**的场景，以牺牲少量精度换取可行的内存占用。
+
+### 实现位置
+
+* Python 版：`src/experiments/maxload.py`（`Maxload` 类，支持单次/批量哈希）
+* C++ 版：`src/cpp/space_saving.hpp`（`SpaceSaving` 类，通过 fingerprint 将任意长度的哈希输出压缩为** **`uint64` 键）
+
+---
+
 ## 性能检测方法
 
 ### CPU 监测
 
-> **注意：** 本节需要使用 **Python 3.13**。
+> **注意：** 本节需要使用** ** **Python 3.13** 。
 
 ```bash
 python3 -m venv .venv313

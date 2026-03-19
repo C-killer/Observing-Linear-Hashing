@@ -1,4 +1,6 @@
+
 # Observing-Linear-Hashing
+
 UE Projet STL (PSTL) - MU4IN508
 
 ## Structure du projet
@@ -51,17 +53,17 @@ Observing-Linear-Hashing/
 
 ### Principes généraux
 
-Les conventions de ce projet sont les suivantes : la branche `main` est protégée, sans CI, sans validation obligatoire, avec une préférence pour le rebase. Les règles principales sont :
+Les conventions de ce projet sont les suivantes : la branche** **`main` est protégée, sans CI, sans validation obligatoire, avec une préférence pour le rebase. Les règles principales sont :
 
-1. Il est interdit de pousser directement sur la branche `main` (protection de branche activée) ;
-2. Toutes les modifications de code doivent être effectuées sur une branche personnelle ou de fonctionnalité, puis intégrées à `main` via une Pull Request (PR) ;
-3. La méthode de fusion doit être uniformément **Rebase (Rebase and merge)**.
+1. Il est interdit de pousser directement sur la branche** **`main` (protection de branche activée) ;
+2. Toutes les modifications de code doivent être effectuées sur une branche personnelle ou de fonctionnalité, puis intégrées à** **`main` via une Pull Request (PR) ;
+3. La méthode de fusion doit être uniformément** ** **Rebase (Rebase and merge)** .
 
 ### Règles de branchement
 
-- `main` : branche stable, réservée à l'intégration — aucun développement direct ni push autorisé.
-- Branches de développement : chaque membre travaille sur sa propre branche.
-- Aucun commit direct sur `main` n'est autorisé ; les commits locaux faits par erreur ne doivent pas être poussés en contournant les règles.
+* `main` : branche stable, réservée à l'intégration — aucun développement direct ni push autorisé.
+* Branches de développement : chaque membre travaille sur sa propre branche.
+* Aucun commit direct sur** **`main` n'est autorisé ; les commits locaux faits par erreur ne doivent pas être poussés en contournant les règles.
 
 ### Initialisation (à faire une seule fois par membre)
 
@@ -75,7 +77,7 @@ git checkout -b dev-<nom>
 git push -u origin dev-<nom>
 ```
 
-### Avant chaque session de travail : synchroniser `main`, puis mettre à jour sa branche (obligatoire)
+### Avant chaque session de travail : synchroniser** **`main`, puis mettre à jour sa branche (obligatoire)
 
 Cette synchronisation est requise avant chaque début de développement afin d'éviter les conflits lors des PR.
 
@@ -100,7 +102,7 @@ git commit -m "xxx"  # Décrire clairement le travail effectué
 git push origin dev-<nom>
 ```
 
-### Finaliser : fusionner dans `main` via PR (seule méthode autorisée)
+### Finaliser : fusionner dans** **`main` via PR (seule méthode autorisée)
 
 #### 1. Préparation avant la PR (obligatoire)
 
@@ -121,15 +123,15 @@ git push --force-with-lease origin dev-<nom>
 
 #### 2. Créer une Pull Request sur GitHub
 
-- **Base :** `main`
-- **Compare :** `dev-xxx`
-- La description de la PR doit inclure :
-  - Le contenu des modifications (ce qui a été fait)
-  - La méthode de test / les résultats (le cas échéant)
+* **Base :** `main`
+* **Compare :** `dev-xxx`
+* La description de la PR doit inclure :
+  * Le contenu des modifications (ce qui a été fait)
+  * La méthode de test / les résultats (le cas échéant)
 
 #### 3. Méthode de fusion (uniformisée)
 
-Lors de la fusion d'une PR, sélectionner : **Rebase and merge**
+Lors de la fusion d'une PR, sélectionner :** ****Rebase and merge**
 
 ### Référence rapide (flux le plus courant)
 
@@ -156,7 +158,7 @@ git push origin dev-<nom>
 
 ### Prérequis
 
-Python ≥ 3.10 et `pytest` installé.
+Python ≥ 3.10 et** **`pytest` installé.
 
 ### Lancer les tests
 
@@ -170,7 +172,7 @@ pytest tests/test_sampling.py
 
 ### Exemple d'exécution
 
-Le fichier `tests/example.py` affiche des exemples de résultats `x, M, h(x)` avec cet algorithme.
+Le fichier** **`tests/example.py` affiche des exemples de résultats** **`x, M, h(x)` avec cet algorithme.
 
 ```bash
 # Depuis la racine du projet
@@ -198,8 +200,7 @@ python3 -c "import fasthash; print(fasthash.__file__)"
 
 ## Expériences
 
-Les expériences permettent d'évaluer le comportement des fonctions de hachage
-linéaires dans le problème classique "balls into bins".
+Les expériences permettent d'évaluer le comportement des fonctions de hachage linéaires dans le problème classique "balls into bins".
 
 ### Lancer une expérience
 
@@ -211,11 +212,49 @@ python -m src.experiments.runner
 
 ---
 
+## Algorithme d'estimation du max-load : Space-Saving
+
+### Description
+
+Le problème central des expériences est d'estimer le max-load, c'est-à-dire le nombre de balles dans le bac le plus chargé après avoir distribué** **`m` balles dans** **`2^l` bacs :
+
+```
+M(S, h) = max_y |{x ∈ S : h(x) = y}|
+```
+
+Lorsque** **`l` est grand (par exemple** **`l=20`, soit un million de bacs), maintenir un comptage exact de chaque bac nécessite une mémoire** **`O(2^l)`, ce qui devient prohibitif. Le projet utilise donc l'algorithme** ** **Space-Saving** , qui estime le max-load en mémoire** **`O(k)`.
+
+### Principe
+
+On maintient une table de** **`k` candidats** **`table[y] = (c, e)`, où** **`c` est l'estimation du compteur et** **`e` la borne d'erreur, avec un** ****tas min paresseux** pour retrouver le candidat de compteur minimal. Pour chaque identifiant de bac** **`y` traité :
+
+* Si** **`y` est déjà dans la table : on incrémente son compteur** **`c` ;
+* Si la table n'est pas pleine : on insère** **`y` avec** **`(c=1, e=0)` ;
+* Si la table est pleine : on extrait le candidat de compteur minimal** **`y_min`, on le remplace par** **`y` en héritant de** **`c_min`comme erreur, et on pose le nouveau compteur à** **`c_min + 1`.
+
+La méthode** **`max_count()` retourne le maximum des compteurs de la table, utilisé comme borne supérieure du max-load.
+
+### Complexité
+
+* Temps :** **`O(N log k)` amorti, où** **`N` est la longueur du flux d'entrée ;
+* Espace :** **`O(k)`.
+
+### Cas d'utilisation
+
+Pour** **`l` petit (par exemple** **`l ≤ 10`, soit ≤ 1024 bacs), un comptage exact est plus rapide et sans erreur d'approximation. Space-Saving est utile principalement quand** ** **`l` est grand et que le nombre de bacs dépasse la mémoire disponible** , au prix d'une légère imprécision.
+
+### Implémentation
+
+* Version Python :** **`src/experiments/maxload.py` (classe** **`Maxload`, supporte le hachage unitaire et par batch)
+* Version C++ :** **`src/cpp/space_saving.hpp` (classe** **`SpaceSaving`, compresse la sortie de hachage de longueur arbitraire en clé** **`uint64` via fingerprint)
+
+---
+
 ## Méthodes de profilage des performances
 
 ### Profilage CPU
 
-> **Note :** Cette section nécessite **Python 3.13**.
+> **Note :** Cette section nécessite** ** **Python 3.13** .
 
 ```bash
 python3 -m venv .venv313
