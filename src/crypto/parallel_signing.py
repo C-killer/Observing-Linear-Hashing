@@ -93,16 +93,35 @@ def run_protocol(n_signers, message, seed=42):
     }
 
 
-if __name__ == "__main__":
-    msg = b"Hello MuSig2-H"
-    n = 3
+def main():
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        description="MuSig2-H 并行签名协议模拟",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="示例：\n"
+               "  sage -python -m src.crypto.parallel_signing -n 5\n"
+               "  sage -python -m src.crypto.parallel_signing -n 3 -m 'vote yes'\n"
+               "  sage -python -m src.crypto.parallel_signing -n 10 -s 0\n",
+    )
+    parser.add_argument("-n", "--n-signers", type=int, default=3,
+                        help="签名者数量（默认 3）")
+    parser.add_argument("-m", "--message", type=str, default="Hello MuSig2-H",
+                        help="待签消息（默认 'Hello MuSig2-H'）")
+    parser.add_argument("-s", "--seed", type=int, default=42,
+                        help="随机种子（默认 42）")
+
+    args = parser.parse_args()
+    n = args.n_signers
+    msg = args.message.encode()
 
     print(f"=== MuSig2-H 并行签名模拟 ===")
     print(f"签名者数量：{n}")
     print(f"消息：{msg}")
+    print(f"随机种子：{args.seed}")
     print()
 
-    result = run_protocol(n, msg)
+    result = run_protocol(n, msg, seed=args.seed)
 
     labels = {
         "keygen":  f"{n} 人（可并行）",
@@ -121,3 +140,10 @@ if __name__ == "__main__":
     status = "通过" if result["verified"] else "失败"
     print(f"验证结果：{status}")
     print(f"总耗时：{result['timing']['total']:.3f}s")
+    print()
+    print("提示：make run-part2 ARGS=\"-h\" 查看所有参数")
+    print("示例：make run-part2 ARGS=\"-n 5 -m 'vote yes' -s 0\"")
+
+
+if __name__ == "__main__":
+    main()

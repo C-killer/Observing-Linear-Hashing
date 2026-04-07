@@ -1,7 +1,7 @@
 # Python 3.13 虚拟环境（C++ pybind11 模块编译目标版本）
 VENV := .venv313/bin/python
 
-.PHONY: test-part1 test-part2 test-all build-cpp run-part1 demo clean help \
+.PHONY: test-part1 test-part2 test-all build-cpp run-part1 run-part2 clean help \
        profile-part2 profile-part2-fast profile-part2-cpu
 
 help:  ## 显示帮助信息
@@ -24,8 +24,8 @@ test-part2:  ## 运行 Part 2 测试（需要 SageMath）
 	sage -python -m pytest tests/test_curve.py tests/test_lhf.py \
 		tests/test_musig2h.py tests/test_signer.py tests/test_parallel.py -v
 
-demo:  ## 运行 MuSig2-H 协议模拟
-	sage -python -m src.crypto.parallel_signing
+run-part2:  ## 运行 Part 2 实验（支持 ARGS，如 make run-part2 ARGS="-n 5 -m 'test'"）
+	sage -python -m src.crypto.parallel_signing $(ARGS)
 
 profile-part2:  ## Part 2 性能分析（基准测试 + 线程崩溃实验）
 	sage -python scripts/profile_musig2h.py

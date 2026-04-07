@@ -219,11 +219,20 @@ sage -python -m pytest tests/test_signer.py -v
 - `verified` — 验证结果
 - `timing` — 各阶段耗时（keygen, keyagg, presign, preagg, sign, signagg, verify, total）
 
-**可直接作为脚本运行：**
+**可直接作为脚本运行（支持命令行参数）：**
 
 ```bash
-sage -python -m src.crypto.parallel_signing
+sage -python -m src.crypto.parallel_signing              # 默认参数（3 人）
+sage -python -m src.crypto.parallel_signing -n 5         # 5 人签名
+sage -python -m src.crypto.parallel_signing -n 10 -m 'vote yes' -s 0  # 自定义全部参数
+sage -python -m src.crypto.parallel_signing -h           # 查看帮助
 ```
+
+| 参数 | 说明 | 默认值 |
+|------|------|--------|
+| `-n` / `--n-signers` | 签名者数量 | 3 |
+| `-m` / `--message` | 待签消息 | `Hello MuSig2-H` |
+| `-s` / `--seed` | 随机种子 | 42 |
 
 输出示例：
 
@@ -231,6 +240,7 @@ sage -python -m src.crypto.parallel_signing
 === MuSig2-H 并行签名模拟 ===
 签名者数量：3
 消息：b'Hello MuSig2-H'
+随机种子：42
 
 [keygen  ]  3 人（可并行）   ... 0.002s
 [keyagg  ]  聚合公钥         ... 0.002s
@@ -364,7 +374,7 @@ S(n) = 1 / ((1 − f) + f / n)
 ```bash
 # 通过 Makefile（推荐）
 make test-part2     # 一次性运行全部 Part 2 测试（82 个）
-make demo           # 运行 MuSig2-H 协议模拟
+make run-part2      # 运行 Part 2 实验（支持 ARGS，如 make run-part2 ARGS="-n 5"）
 
 # 逐模块运行
 sage -python -m pytest tests/test_curve.py -v
