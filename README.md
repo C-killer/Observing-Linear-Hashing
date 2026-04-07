@@ -230,19 +230,19 @@ Pour **`l` petit (par exemple** **`l ≤ 10`, soit ≤ 1024 bacs), un comptage e
 source .venv313/bin/activate
 
 # Génération d'un flamegraph CPU
-sudo py-spy record -o profiling/profile.svg -- python -m src.experiments.runner
-open profiling/profile.svg
+sudo py-spy record -o profiling/part1/profile.svg -- python -m src.experiments.runner
+open profiling/part1/profile.svg
 ```
 
 ### Profilage mémoire
 
 ```bash
 # Étape 1 : collecter les données mémoire
-python -m memray run -o profiling/memray.bin -m src.experiments.runner
+python -m memray run -o profiling/part1/memray.bin -m src.experiments.runner
 
 # Étape 2 : générer le rapport flamegraph HTML
-python -m memray flamegraph profiling/memray.bin -o profiling/memray-flamegraph.html
+python -m memray flamegraph profiling/part1/memray.bin -o profiling/part1/memray-flamegraph.html
 
 # Étape 3 : ouvrir le rapport dans le navigateur
-open profiling/memray-flamegraph.html
+open profiling/part1/memray-flamegraph.html
 ```

@@ -1,7 +1,8 @@
 # Python 3.13 虚拟环境（C++ pybind11 模块编译目标版本）
 VENV := .venv313/bin/python
 
-.PHONY: test-part1 test-part2 test-all build-cpp run-part1 demo clean help
+.PHONY: test-part1 test-part2 test-all build-cpp run-part1 demo clean help \
+       profile-part2 profile-part2-fast profile-part2-cpu
 
 help:  ## 显示帮助信息
 	@grep -E '^[a-zA-Z0-9_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
@@ -25,6 +26,17 @@ test-part2:  ## 运行 Part 2 测试（需要 SageMath）
 
 demo:  ## 运行 MuSig2-H 协议模拟
 	sage -python -m src.crypto.parallel_signing
+
+profile-part2:  ## Part 2 性能分析（基准测试 + 线程崩溃实验）
+	sage -python scripts/profile_musig2h.py
+
+profile-part2-fast:  ## Part 2 性能分析（跳过崩溃实验，快速）
+	sage -python scripts/profile_musig2h.py --skip-crash --warmup 1 --repeats 3
+
+profile-part2-cpu:  ## Part 2 CPU 分析（cProfile + 调用图）
+	sage -python scripts/profile_cpu_runner.py
+	gprof2dot -f pstats profiling/part2/profile_musig2h.prof | dot -Tpng -o profiling/part2/profile_musig2h.png
+	@echo "[Done] 调用图：profiling/part2/profile_musig2h.png"
 
 # === 全部 ===
 test-all: test-part1 test-part2  ## 运行全部测试
