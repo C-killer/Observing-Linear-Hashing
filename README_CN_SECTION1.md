@@ -166,10 +166,41 @@ make build-cpp      # 构建 C++ 后端（pybind11, Python 3.13）
 make test-part1     # Part 1 测试（自动编译 C++）
 make test-part2     # Part 2 测试（需要 SageMath）
 make test-all       # 全部测试
-make run-part1      # 运行 Part 1 实验
+make run-part1      # 运行 Part 1 实验（默认参数）
 make demo           # MuSig2-H 协议模拟
 make clean          # 清理构建产物
 ```
+
+### Part 1 实验参数
+
+`run-part1` 支持通过 `ARGS` 传入命令行参数：
+
+```bash
+# 默认参数运行
+make run-part1
+
+# 自定义 u, l, trials
+make run-part1 ARGS="-u 3000 5000 -l 20 25 30 -t 10000"
+
+# 切换后端（cpp / py / py-fixed）
+make run-part1 ARGS="--backend py --no-plot"
+
+# 完整参数列表
+make run-part1 ARGS="-h"
+```
+
+| 参数 | 说明 | 默认值 |
+|------|------|--------|
+| `-u` | u 值（可多个） | 3000 |
+| `-l` | l 值（可多个） | 30 |
+| `-r` | r 值（可多个） | 2.0 2.3 2.6 2.9 3.2 3.5 4.0 |
+| `-t` | trials 数量 | 5000 |
+| `-m` | m_factor（m = m_factor × 2^l） | 1.5 |
+| `-s` | 随机种子 | 123 |
+| `-d` | 分布类型 | uniform |
+| `--backend` | 后端选择：`cpp` / `py` / `py-fixed` | cpp |
+| `--threads` | C++ 后端线程数 | 10 |
+| `--no-plot` | 禁用绘图 | — |
 
 ### 运行示例
 

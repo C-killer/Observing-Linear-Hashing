@@ -16,8 +16,8 @@ build-cpp:  ## 构建 C++ 后端（pybind11, Python 3.13）
 	cmake -S src/cpp -B src/cpp/build -DCMAKE_BUILD_TYPE=Release
 	cmake --build src/cpp/build -j
 
-run-part1:  ## 运行 Part 1 实验
-	$(VENV) -m src.experiments.runner
+run-part1:  ## 运行 Part 1 实验（支持 ARGS 传参）
+	$(VENV) -m src.experiments.runner $(ARGS)
 
 # === Part 2 ===
 test-part2:  ## 运行 Part 2 测试（需要 SageMath）

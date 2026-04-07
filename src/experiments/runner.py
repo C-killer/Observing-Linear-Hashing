@@ -256,20 +256,47 @@ def run_experiment_grid_Cpp(
     return results
 
 
+def parse_args():
+    import argparse
+    parser = argparse.ArgumentParser(description="Run linear hashing max-load experiments")
+    parser.add_argument("-u", "--u-values", type=int, nargs="+", default=[3000],
+                        help="u values (default: 3000)")
+    parser.add_argument("-l", "--l-values", type=int, nargs="+", default=[30],
+                        help="l values (default: 30)")
+    parser.add_argument("-r", "--r-values", type=float, nargs="+",
+                        default=[2.0, 2.3, 2.6, 2.9, 3.2, 3.5, 4.0],
+                        help="r values (default: 2.0 2.3 2.6 2.9 3.2 3.5 4.0)")
+    parser.add_argument("-t", "--trials", type=int, default=5000,
+                        help="number of trials (default: 5000)")
+    parser.add_argument("-m", "--m-factor", type=float, default=1.5,
+                        help="m = m_factor * 2^l (default: 1.5)")
+    parser.add_argument("-s", "--seed", type=int, default=123,
+                        help="random seed (default: 123)")
+    parser.add_argument("-d", "--dist", type=str, default="uniform",
+                        help="distribution for S (default: uniform)")
+    parser.add_argument("--threads", type=int, default=10,
+                        help="number of threads for C++ backend (default: 10)")
+    parser.add_argument("--backend", choices=["cpp", "py", "py-fixed"],
+                        default="cpp",
+                        help="backend: cpp / py (not fixed S) / py-fixed (default: cpp)")
+    parser.add_argument("--no-plot", action="store_true",
+                        help="disable plotting")
+    return parser.parse_args()
+
+
 if __name__ == "__main__":
-    u_values = [3000]                 
-    l_values = [30]         
-    r_values =  [2.0, 2.3, 2.6, 2.9, 3.2, 3.5, 4.0]
+    args = parse_args()
 
-    trials = 5000
-    m_factor = 1.5           # m(initial) = 2^l
-    seed = 123
+    u_values = args.u_values
+    l_values = args.l_values
+    r_values = args.r_values
+    trials = args.trials
+    m_factor = args.m_factor
+    seed = args.seed
+    dist = args.dist
+    dist_params = {}
 
-    dist = "uniform"
-    dist_params = {}                
-
-
-    results = run_experiment_grid_Cpp(
+    common = dict(
         u_values=u_values,
         l_values=l_values,
         r_values=r_values,
@@ -279,11 +306,17 @@ if __name__ == "__main__":
         dist_params=dist_params,
         seed=seed,
     )
-    
-    # results 的 key 是 (u, l)
-    results_by_l = {
-        l: [results[(u_values[0], l)][r] for r in r_values]
-        for l in l_values
-    }
 
-    plot_profile_over_l(results_by_l, r_values)
+    if args.backend == "cpp":
+        results = run_experiment_grid_Cpp(**common)
+    elif args.backend == "py":
+        results = run_experiment_grid_not_fixed_S(**common)
+    else:
+        results = run_experiment_grid(**common)
+
+    if not args.no_plot:
+        results_by_l = {
+            l: [results[(u_values[0], l)][r] for r in r_values]
+            for l in l_values
+        }
+        plot_profile_over_l(results_by_l, r_values)
