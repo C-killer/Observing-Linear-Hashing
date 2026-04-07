@@ -7,42 +7,48 @@ UE Projet STL (PSTL) - MU4IN508
 
 ```
 Observing-Linear-Hashing/
+├── Makefile                         # 统一入口：make help 查看所有命令
 ├── src/
-│   ├── hashing/
-│   │   ├── linear_f2.py       # F2 上线性哈希的实现（Python 与 C++ 两个后端）
-│   │   └── sampling.py        # 随机向量生成器（均匀分布、Bernoulli、
-│   │                          #   Hamming 重量、Markov）
-│   ├── experiments/
-│   │   ├── runner.py          # 实验主入口：参数网格（u, l, r, m），
-│   │   │                      #   用纯 Python 或 C++ 模块估计 P[max-load ≥ T(r)]
-│   │   ├── maxload.py         # Python 版 Space-Saving 算法，
-│   │   │                      #   用惰性最小堆在 O(k) 内存下估计 max-load
-│   │   └── mlShower.py        # 快速脚本：调用 C++ trials 并打印 max-load 分布
-│   ├── viz/
-│   │   └── plot.py            # 可视化函数（实验曲线 vs 理论曲线）
-│   └── cpp/
-│       ├── linear_hash.hpp/cpp      # C++ 线性哈希 F2（逐位运算，uint64 分块）
-│       ├── trial_maxload.hpp/cpp    # 单次 trial：生成 S，对每个 x 计算 h(x)，
-│       │                            #   通过 C++ Space-Saving 估计 max-load
-│       ├── space_saving.hpp         # C++ Space-Saving 算法
-│       │                            #   （惰性最小堆，fingerprint uint64 键）
-│       ├── parallel_trials.hpp      # 基于 std::thread 的 trials 并行化
-│       ├── samplers.hpp             # C++ 随机向量生成
-│       ├── bindings.cpp             # pybind11 绑定：向 Python 暴露
-│       │                            #   LinearHash 与 run_trials_maxload
-│       └── CMakeLists.txt           # fasthash 模块的编译配置
-├── tests/
-│   ├── conftest.py         # pytest 共享 fixture
-│   ├── test_sampling.py    # 采样分布的单元测试
-│   ├── test_py.py          # Python 哈希实现的测试
-│   ├── test_cpp.py         # C++ fasthash 模块的测试
-│   └── example.py          # 示例：打印 x, M, h(x)
-├── compare.py                   # Python vs C++ 基准测试：吞吐量（ns/op, M ops/s）、
-│                                #   单次/批量加速比、多线程 trials
-├── DD22.pdf                     # 参考文献
-├── JKZ25.pdf                    # 参考文献
-├── TZ23.pdf                     # 参考文献
-├── Observing_Linear_Hashing.pdf # 项目报告
+│   ├── hashing/                     # Part 1：F2 上线性哈希
+│   │   ├── linear_f2.py            #   Python 与 C++ 两个后端
+│   │   └── sampling.py             #   随机向量生成器
+│   ├── experiments/                 # Part 1：max-load 实验
+│   │   ├── runner.py               #   实验主入口
+│   │   ├── maxload.py              #   Space-Saving 算法（Python）
+│   │   └── mlShower.py             #   max-load 分布打印
+│   ├── crypto/                      # Part 2：MuSig2-H 多签方案
+│   │   ├── curve.py                #   椭圆曲线封装（Curve25519）
+│   │   ├── lhf.py                  #   Pedersen 线性哈希函数
+│   │   ├── musig2h.py              #   MuSig2-H 8 个算法 + 3 个哈希
+│   │   ├── signer.py               #   Signer 类（参与方状态封装）
+│   │   └── parallel_signing.py     #   协议协调器（7 步流程）
+│   └── cpp/                         # Part 1：C++ 后端（pybind11）
+│       ├── linear_hash.hpp/cpp     #   C++ 线性哈希 F2
+│       ├── trial_maxload.hpp/cpp   #   单次 trial + Space-Saving
+│       ├── space_saving.hpp        #   C++ Space-Saving 算法
+│       ├── parallel_trials.hpp     #   std::thread 并行化
+│       ├── samplers.hpp            #   C++ 随机向量生成
+│       ├── bindings.cpp            #   pybind11 绑定
+│       └── CMakeLists.txt          #   CMake 配置
+├── tests/                           # 测试（Part 1：90 个，Part 2：82 个）
+│   ├── conftest.py
+│   ├── test_sampling.py            #   采样分布测试
+│   ├── test_py.py                  #   Python 哈希测试
+│   ├── test_cpp.py                 #   C++ fasthash 测试
+│   ├── test_curve.py               #   椭圆曲线性质（21 tests）
+│   ├── test_lhf.py                 #   线性哈希函数（15 tests）
+│   ├── test_musig2h.py             #   签名方案正确性（18 tests）
+│   ├── test_signer.py              #   Signer 封装（14 tests）
+│   ├── test_parallel.py            #   协议协调器（9 tests）
+│   └── example.py
+├── docs/                            # 文档
+│   ├── part2_background.md         #   Part 2 研究背景
+│   └── pari_thread_safety.md       #   PARI 线程安全问题分析
+├── papers/                          # 参考文献（PDF）
+├── profiling/                       # 性能分析结果（CPU/内存）
+├── scripts/
+│   └── compare.py                  # Python vs C++ 基准测试
+├── data/                            # 实验数据
 └── .gitignore
 ```
 
@@ -150,20 +156,19 @@ git push origin dev-<name>
 
 ---
 
-## 测试
+## 命令（Makefile）
 
-### 环境要求
-
-Python ≥ 3.10 并且已安装 `pytest`。
-
-### 运行测试
+项目使用 `Makefile` 作为统一入口。运行 `make help` 查看所有命令：
 
 ```bash
-# 在项目根目录执行
-pytest
-
-# 或只运行某个测试文件
-pytest tests/test_sampling.py
+make help           # 显示所有可用命令
+make build-cpp      # 构建 C++ 后端（pybind11, Python 3.13）
+make test-part1     # Part 1 测试（自动编译 C++）
+make test-part2     # Part 2 测试（需要 SageMath）
+make test-all       # 全部测试
+make run-part1      # 运行 Part 1 实验
+make demo           # MuSig2-H 协议模拟
+make clean          # 清理构建产物
 ```
 
 ### 运行示例
@@ -171,39 +176,7 @@ pytest tests/test_sampling.py
 在 **`tests/example.py` 中，打印了在该算法下** `x, M, h(x)` 结果的示例。
 
 ```bash
-# 在项目根目录运行
 python3 tests/example.py
-```
-
----
-
-## 构建 C++ 模块
-
-### 编译
-
-```bash
-# 在根目录
-cd Observing-Linear-Hashing/
-cmake -S src/cpp -B src/cpp/build -DCMAKE_BUILD_TYPE=Release
-cmake --build src/cpp/build -j
-
-# 验证编译成功
-python3 -c "import fasthash; print(fasthash.__file__)"
-# 输出类似：Observing-Linear-Hashing/fasthash.cpython-313-darwin.so
-```
-
----
-
-## 实验
-
-实验用于评估线性哈希函数在经典"balls into bins"问题中的行为，估计 max-load 超过阈值 T(r) 的概率。
-
-### 运行实验
-
-在项目根目录执行：
-
-```bash
-python -m src.experiments.runner
 ```
 
 ---
@@ -253,26 +226,22 @@ M(S, h) = max_y |{x ∈ S : h(x) = y}|
 > **注意：** 本节需要使用 **Python 3.13** 。
 
 ```bash
-python3 -m venv .venv313
 source .venv313/bin/activate
-python -V   # 确认是 3.13.x
-```
 
-```bash
 # CPU 火焰图
-sudo py-spy record -o profile.svg -- python -m src.experiments.runner
-open profile.svg
+sudo py-spy record -o profiling/profile.svg -- python -m src.experiments.runner
+open profiling/profile.svg
 ```
 
 ### 内存监测
 
 ```bash
 # 第一步：采集内存数据
-python -m memray run -o memray.bin -m src.experiments.runner
+python -m memray run -o profiling/memray.bin -m src.experiments.runner
 
 # 第二步：生成 HTML 火焰图报告
-python -m memray flamegraph memray.bin -o memray-flamegraph.html
+python -m memray flamegraph profiling/memray.bin -o profiling/memray-flamegraph.html
 
 # 第三步：在浏览器中打开报告
-open memray-flamegraph.html
+open profiling/memray-flamegraph.html
 ```
