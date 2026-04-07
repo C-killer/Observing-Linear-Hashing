@@ -229,19 +229,19 @@ M(S, h) = max_y |{x ∈ S : h(x) = y}|
 source .venv313/bin/activate
 
 # CPU 火焰图
-sudo py-spy record -o profiling/profile.svg -- python -m src.experiments.runner
-open profiling/profile.svg
+sudo py-spy record -o profiling/part1/profile.svg -- python -m src.experiments.runner
+open profiling/part1/profile.svg
 ```
 
 ### 内存监测
 
 ```bash
 # 第一步：采集内存数据
-python -m memray run -o profiling/memray.bin -m src.experiments.runner
+python -m memray run -o profiling/part1/memray.bin -m src.experiments.runner
 
 # 第二步：生成 HTML 火焰图报告
-python -m memray flamegraph profiling/memray.bin -o profiling/memray-flamegraph.html
+python -m memray flamegraph profiling/part1/memray.bin -o profiling/part1/memray-flamegraph.html
 
 # 第三步：在浏览器中打开报告
-open profiling/memray-flamegraph.html
+open profiling/part1/memray-flamegraph.html
 ```

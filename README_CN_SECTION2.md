@@ -8,7 +8,6 @@
 
 - [Part 2 背景手册](docs/part2_background.md) — 研究动机、Part 1 到 Part 2 的桥梁、MuSig2 vs MuSig2-H 对比
 - [PARI 线程安全问题分析](docs/pari_thread_safety.md) — 并行化过程中遇到的 SageMath/PARI 底层问题及解决方案
-- [课堂黑板笔记](blackboard_notes.md) — 老师板书转录
 
 ## 环境依赖
 
@@ -281,6 +280,85 @@ Python 的 GIL 无法防止此问题——`cypari2` 在调用 PARI 的 C 函数�
 
 ---
 
+## 性能分析与 Profiling
+
+性能分析脚本 `scripts/profile_musig2h.py` 包含 4 个实验。
+
+```bash
+make profile-part2       # 完整运行（含崩溃实验，约 3 分钟）
+make profile-part2-fast  # 快速运行（跳过崩溃实验）
+make profile-part2-cpu   # CPU 调用图（cProfile + gprof2dot）
+```
+
+### 实验 A：线程崩溃复现
+
+通过 `subprocess` 隔离调用 `ThreadPoolExecutor` 并发构造 Signer 对象，验证 PARI 线程安全问题。
+
+| signers | threads | repeats | crashed | rate | 错误类型                                  |
+| ------- | ------- | ------- | ------- | ---- | ----------------------------------------- |
+| 2       | 2       | 5       | 5       | 100% | cysignals.SignalError: Segmentation fault |
+| 4       | 4       | 5       | 5       | 100% | cysignals.SignalError: Segmentation fault |
+| 8       | 8       | 5       | 5       | 100% | cysignals.SignalError: Segmentation fault |
+
+崩溃调用链：`Signer.__init__` → `keygen` → `F_key` → `scalar_mult` → `Integer.__mul__` → `pari.ellmul` → `cypari2.new_gen_from_mpz_t` → **SIGSEGV**
+
+### 实验 B：顺序执行扩展性
+
+不同签名者数量下各阶段中位数耗时（ms）：
+
+| n  | keygen | keyagg | presign | preagg | sign  | signagg | verify | total |
+| -- | ------ | ------ | ------- | ------ | ----- | ------- | ------ | ----- |
+| 1  | 0.6    | 0.6    | 4.6     | 0.0    | 2.2   | 0.0     | 1.7    | 9.6   |
+| 5  | 2.8    | 2.9    | 22.0    | 0.2    | 22.8  | 0.0     | 1.7    | 52.2  |
+| 10 | 5.6    | 5.8    | 44.1    | 0.4    | 75.3  | 0.0     | 1.7    | 132.8 |
+| 20 | 11.0   | 12.0   | 87.7    | 0.7    | 270.6 | 0.0     | 1.6    | 383.6 |
+
+可并行阶段（keygen, presign, sign）耗时随 n 线性增长，顺序阶段（verify, signagg）近似恒定。
+
+### 实验 C：阶段耗时分解
+
+| n  | T_parallel | T_sequential | T_total | parallel% |
+| -- | ---------- | ------------ | ------- | --------- |
+| 1  | 7.3ms      | 2.2ms        | 9.6ms   | 76.4%     |
+| 5  | 47.5ms     | 4.7ms        | 52.2ms  | 91.0%     |
+| 10 | 125.0ms    | 7.9ms        | 132.8ms | 94.1%     |
+| 20 | 369.4ms    | 14.4ms       | 383.6ms | 96.3%     |
+
+随签名者数量增加，可并行比例从 76% 增至 96%——并行化的收益空间越来越大，但 PARI 限制使其无法实现。
+
+### 实验 D：Amdahl's Law 理论加速比
+
+根据 Amdahl's Law [^amdahl]，给定可并行比例 f 和 worker 数 n，理论加速比为：
+
+```
+S(n) = 1 / ((1 − f) + f / n)
+```
+
+基于 n=20 的实测数据：可并行比例 f = 96.3%
+
+| workers | 理论加速比 | 实际加速比 | 损失   |
+| ------- | ---------- | ---------- | ------ |
+| 2       | 1.93x      | 1.00x      | 0.93x  |
+| 4       | 3.60x      | 1.00x      | 2.60x  |
+| 8       | 6.35x      | 1.00x      | 5.35x  |
+| 16      | 10.28x     | 1.00x      | 9.28x  |
+| 32      | 14.88x     | 1.00x      | 13.88x |
+
+### CPU 调用图
+
+![CPU 调用图](profiling/part2/profile_musig2h.png)
+
+`cProfile` 采集 + `gprof2dot` 可视化。结果清楚显示：**`_acted_upon_`（PARI `ellmul` 标量乘法）占 90.4% 的 CPU 时间**。
+这正是 PARI 全局栈争用的热点——如果能并行化这个函数，性能提升最大，但 PARI 的全局栈设计使其不可能线程安全地并发执行。
+
+### 扩展性与 Amdahl 可视化
+
+![扩展性分析](profiling/part2/scalability.png)
+
+![Amdahl's Law 分析](profiling/part2/amdahl.png)
+
+---
+
 ## 运行所有测试
 
 ```bash
@@ -325,3 +403,5 @@ sage -python -m pytest tests/test_parallel.py -v
 | `README_CN_SECTION2.md`      | 本文件，Part 2 实现指南           |
 | `docs/part2_background.md`   | 研究动机、Part 1 到 Part 2 的桥梁 |
 | `docs/pari_thread_safety.md` | PARI 线程安全问题的完整分析       |
+
+[^amdahl]: G. M. Amdahl, "Validity of the Single Processor Approach to Achieving Large Scale Computing Capabilities", *AFIPS Conference Proceedings*, 1967, pp. 483–485.
