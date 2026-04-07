@@ -19,32 +19,36 @@
 
 ### 八个算法
 
-| # | 算法 | 执行者 | 功能 |
-|---|------|--------|------|
-| 1 | **Setup** | 系统 | 生成公共参数 `(p, E, G, Z)`，所有人共享 |
-| 2 | **KeyGen** | 每个签名者 | 生成密钥对：`sk <- Z_q`，`pk = sk*G` |
-| 3 | **KeyAgg** | 任何人 | 输入公钥列表 `L`，输出聚合公钥 `apk = Sum H_agg(L, pk_i)*pk_i` |
+| # | 算法              | 执行者     | 功能                                                                                                     |
+| - | ----------------- | ---------- | -------------------------------------------------------------------------------------------------------- |
+| 1 | **Setup**   | 系统       | 生成公共参数 `(p, E, G, Z)`，所有人共享                                                                |
+| 2 | **KeyGen**  | 每个签名者 | 生成密钥对：`sk <- Z_q`，`pk = sk*G`                                                                 |
+| 3 | **KeyAgg**  | 任何人     | 输入公钥列表 `L`，输出聚合公钥 `apk = Sum H_agg(L, pk_i)*pk_i`                                       |
 | 4 | **PreSign** | 每个签名者 | 生成 4 个随机 nonce 对 `r_j in Z_q^2`，计算 `R_j = F(r_j)`，公开 `(R_1..R_4)`，保密 `(r_1..r_4)` |
-| 5 | **PreAgg** | 任何人 | 聚合所有签名者的 nonce：`R_j = Sum_i R_{i,j}`，得到 `(R_1..R_4)` |
-| 6 | **Sign** | 每个签名者 | 用私钥 `sk`、保密的 `r_j`、聚合 nonce、消息 `m`，计算部分签名 `(R, s_i)` |
-| 7 | **SignAgg** | 任何人 | 聚合部分签名：`s = Sum s_i`，输出最终签名 `sigma = (R, s)` |
-| 8 | **Ver** | 任何人 | 验证 `F(s) == R + H_sig(apk, R, m)*apk` |
+| 5 | **PreAgg**  | 任何人     | 聚合所有签名者的 nonce：`R_j = Sum_i R_{i,j}`，得到 `(R_1..R_4)`                                     |
+| 6 | **Sign**    | 每个签名者 | 用私钥 `sk`、保密的 `r_j`、聚合 nonce、消息 `m`，计算部分签名 `(R, s_i)`                         |
+| 7 | **SignAgg** | 任何人     | 聚合部分签名：`s = Sum s_i`，输出最终签名 `sigma = (R, s)`                                           |
+| 8 | **Ver**     | 任何人     | 验证 `F(s) == R + H_sig(apk, R, m)*apk`                                                                |
 
 ### 执行流程
 
 ```
-KeyGen x n 人  ->  KeyAgg  ->  PreSign x n 人  ->  PreAgg
-                                                    |
-                              收到消息 m  ->  Sign x n 人  ->  SignAgg  ->  Ver
+      ① KeyGen × n        ← 可并行：每人独立生成密钥
+      ② KeyAgg            ← 顺序：收集所有公钥后聚合
+      ③ PreSign × n       ← 可并行：每人独立生成 nonce
+      ④ PreAgg            ← 顺序：同步点 1，聚合 nonce
+      ⑤ Sign × n          ← 可并行：每人独立算部分签名
+      ⑥ SignAgg           ← 顺序：同步点 2，聚合签名
+      ⑦ Ver               ← 顺序：验证
 ```
 
 ### 三个哈希函数（域分离）
 
-| 哈希 | 输入 | 用途 |
-|------|------|------|
-| `H_agg(L, pk)` | 公钥列表 + 单个公钥 | KeyAgg 中计算聚合系数，防止 rogue-key 攻击 |
-| `H_non(apk, R_1..R_4, m)` | 聚合公钥 + 4 个 nonce 点 + 消息 | Sign 中将 4 个 nonce 合并为 1 个 |
-| `H_sig(apk, R, m)` | 聚合公钥 + 聚合 nonce + 消息 | Sign/Ver 中的 Schnorr 挑战值 |
+| 哈希                        | 输入                            | 用途                                       |
+| --------------------------- | ------------------------------- | ------------------------------------------ |
+| `H_agg(L, pk)`            | 公钥列表 + 单个公钥             | KeyAgg 中计算聚合系数，防止 rogue-key 攻击 |
+| `H_non(apk, R_1..R_4, m)` | 聚合公钥 + 4 个 nonce 点 + 消息 | Sign 中将 4 个 nonce 合并为 1 个           |
+| `H_sig(apk, R, m)`        | 聚合公钥 + 聚合 nonce + 消息    | Sign/Ver 中的 Schnorr 挑战值               |
 
 ---
 
@@ -114,16 +118,16 @@ sage -python -m pytest tests/test_lhf.py -v
 
 **算法实现：**
 
-| 函数 | 对应算法 | 说明 |
-|------|---------|------|
-| `setup()` | Setup | 返回公共参数 `(p, G, Z, q)` |
-| `keygen(rng)` | KeyGen | `sk <- Z_q`, `pk = sk*G` |
-| `key_agg(L)` | KeyAgg | `apk = Sum H_agg(L, pk_i)*pk_i` |
-| `presign(rng)` | PreSign | 生成 4 个 nonce 对 `r_j in Z_q^2` 和承诺 `R_j = F(r_j)` |
-| `preagg(pp_list)` | PreAgg | 按分量聚合 nonce：`R_j = Sum_i R_{i,j}` |
-| `sign(st, app, sk, pk, m, L)` | Sign | 计算部分签名 `(R, s)` |
-| `sign_agg(out_list)` | SignAgg | 聚合部分签名，验证 R 一致性 |
-| `ver(apk, m, sigma)` | Ver | 验证 `F(s) == R + c*apk` |
+| 函数                            | 对应算法 | 说明                                                        |
+| ------------------------------- | -------- | ----------------------------------------------------------- |
+| `setup()`                     | Setup    | 返回公共参数 `(p, G, Z, q)`                               |
+| `keygen(rng)`                 | KeyGen   | `sk <- Z_q`, `pk = sk*G`                                |
+| `key_agg(L)`                  | KeyAgg   | `apk = Sum H_agg(L, pk_i)*pk_i`                           |
+| `presign(rng)`                | PreSign  | 生成 4 个 nonce 对 `r_j in Z_q^2` 和承诺 `R_j = F(r_j)` |
+| `preagg(pp_list)`             | PreAgg   | 按分量聚合 nonce：`R_j = Sum_i R_{i,j}`                   |
+| `sign(st, app, sk, pk, m, L)` | Sign     | 计算部分签名 `(R, s)`                                     |
+| `sign_agg(out_list)`          | SignAgg  | 聚合部分签名，验证 R 一致性                                 |
+| `ver(apk, m, sigma)`          | Ver      | 验证 `F(s) == R + c*apk`                                  |
 
 **三个域分离哈希函数：**
 
@@ -176,14 +180,14 @@ Signer(seed)              # 构造时自动 KeyGen，持有私钥和公钥
 
 **内部状态：**
 
-| 属性 | 类型 | 何时设置 | 说明 |
-|------|------|---------|------|
-| `sk` | 标量 | 构造时 | 私钥，永久保密 |
-| `pk` | 曲线点 | 构造时 | 公钥，公开 |
-| `_peers` | 曲线点列表 | `set_peers` | 其他签名者的公钥 |
-| `_st` | nonce 对元组 | `presign` | 保密的随机数，签名后销毁 |
-| `_pp` | 曲线点元组 | `presign` | 公开的 nonce 承诺 |
-| `_app` | 曲线点元组 | `receive_agg_nonce` | 聚合后的 nonce 承诺 |
+| 属性       | 类型         | 何时设置              | 说明                     |
+| ---------- | ------------ | --------------------- | ------------------------ |
+| `sk`     | 标量         | 构造时                | 私钥，永久保密           |
+| `pk`     | 曲线点       | 构造时                | 公钥，公开               |
+| `_peers` | 曲线点列表   | `set_peers`         | 其他签名者的公钥         |
+| `_st`    | nonce 对元组 | `presign`           | 保密的随机数，签名后销毁 |
+| `_pp`    | 曲线点元组   | `presign`           | 公开的 nonce 承诺        |
+| `_app`   | 曲线点元组   | `receive_agg_nonce` | 聚合后的 nonce 承诺      |
 
 **测试：**
 
@@ -280,44 +284,44 @@ Python 的 GIL 无法防止此问题——`cypari2` 在调用 PARI 的 C 函数�
 ## 运行所有测试
 
 ```bash
+# 通过 Makefile（推荐）
+make test-part2     # 一次性运行全部 Part 2 测试（82 个）
+make demo           # 运行 MuSig2-H 协议模拟
+
 # 逐模块运行
 sage -python -m pytest tests/test_curve.py -v
 sage -python -m pytest tests/test_lhf.py -v
 sage -python -m pytest tests/test_musig2h.py -v
 sage -python -m pytest tests/test_signer.py -v
 sage -python -m pytest tests/test_parallel.py -v
-
-# 一次性运行全部 Part 2 测试（82 个）
-sage -python -m pytest tests/test_curve.py tests/test_lhf.py tests/test_musig2h.py tests/test_signer.py tests/test_parallel.py -v
 ```
 
 ## 文件总览
 
 ### 源码
 
-| 文件 | 行数 | 职责 |
-|------|------|------|
-| `src/crypto/curve.py` | 82 | Curve25519 封装：有限域、曲线、基点 G/Z、工具函数 |
-| `src/crypto/lhf.py` | 48 | Pedersen 线性哈希函数：`F(x1,x2) = x1*G + x2*Z` |
-| `src/crypto/musig2h.py` | 234 | MuSig2-H 8 个算法 + 3 个域分离哈希函数 |
-| `src/crypto/signer.py` | 88 | Signer 类：状态管理、协议顺序检查、nonce 销毁 |
-| `src/crypto/parallel_signing.py` | 124 | 协议协调器：7 步流程编排 + 计时 |
+| 文件                               | 行数 | 职责                                              |
+| ---------------------------------- | ---- | ------------------------------------------------- |
+| `src/crypto/curve.py`            | 82   | Curve25519 封装：有限域、曲线、基点 G/Z、工具函数 |
+| `src/crypto/lhf.py`              | 48   | Pedersen 线性哈希函数：`F(x1,x2) = x1*G + x2*Z` |
+| `src/crypto/musig2h.py`          | 234  | MuSig2-H 8 个算法 + 3 个域分离哈希函数            |
+| `src/crypto/signer.py`           | 88   | Signer 类：状态管理、协议顺序检查、nonce 销毁     |
+| `src/crypto/parallel_signing.py` | 124  | 协议协调器：7 步流程编排 + 计时                   |
 
 ### 测试
 
-| 文件 | 测试数 | 覆盖内容 |
-|------|--------|---------|
-| `tests/test_curve.py` | 21 | 素数域、曲线阶、子群、算术性质、随机标量 |
-| `tests/test_lhf.py` | 15 | 线性性、满同态、非单射、接口兼容 |
-| `tests/test_musig2h.py` | 18 | 8 算法单元测试 + 1/2/3/5 人协议 + 安全性 |
-| `tests/test_signer.py` | 14 | Signer 生命周期、nonce 安全、跳步报错 |
-| `tests/test_parallel.py` | 9 | 协调器正确性、返回结构、可复现、安全性 |
+| 文件                       | 测试数 | 覆盖内容                                 |
+| -------------------------- | ------ | ---------------------------------------- |
+| `tests/test_curve.py`    | 21     | 素数域、曲线阶、子群、算术性质、随机标量 |
+| `tests/test_lhf.py`      | 15     | 线性性、满同态、非单射、接口兼容         |
+| `tests/test_musig2h.py`  | 18     | 8 算法单元测试 + 1/2/3/5 人协议 + 安全性 |
+| `tests/test_signer.py`   | 14     | Signer 生命周期、nonce 安全、跳步报错    |
+| `tests/test_parallel.py` | 9      | 协调器正确性、返回结构、可复现、安全性   |
 
 ### 文档
 
-| 文件 | 说明 |
-|------|------|
-| `README_CN_SECTION2.md` | 本文件，Part 2 实现指南 |
-| `docs/part2_background.md` | 研究动机、Part 1 到 Part 2 的桥梁 |
-| `docs/pari_thread_safety.md` | PARI 线程安全问题的完整分析 |
-| `blackboard_notes.md` | 课堂板书转录 |
+| 文件                           | 说明                              |
+| ------------------------------ | --------------------------------- |
+| `README_CN_SECTION2.md`      | 本文件，Part 2 实现指南           |
+| `docs/part2_background.md`   | 研究动机、Part 1 到 Part 2 的桥梁 |
+| `docs/pari_thread_safety.md` | PARI 线程安全问题的完整分析       |

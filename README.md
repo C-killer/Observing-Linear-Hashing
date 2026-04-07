@@ -7,45 +7,48 @@ UE Projet STL (PSTL) - MU4IN508
 
 ```
 Observing-Linear-Hashing/
+├── Makefile                         # Point d'entrée unifié : make help pour la liste
 ├── src/
-│   ├── hashing/
-│   │   ├── linear_f2.py       # Implémentation du hachage linéaire sur F2 (Python et C++)
-│   │   └── sampling.py        # Générateurs de vecteurs aléatoires (uniforme, Bernoulli,
-│   │                          #   poids de Hamming, Markov)
-│   ├── experiments/
-│   │   ├── runner.py          # Point d'entrée principal des expériences ;
-│   │   │                      #   grilles de paramètres (u, l, r, m), estimation de
-│   │   │                      #   P[max-load ≥ T(r)] en Python pur ou via le module C++
-│   │   ├── maxload.py         # Algorithme Space-Saving (Python) pour estimer le max-load
-│   │   │                      #   en mémoire O(k) avec un tas min paresseux
-│   │   └── mlShower.py        # Script rapide : lance des trials C++ et affiche la
-│   │                          #   distribution du max-load
-│   ├── viz/
-│   │   └── plot.py            # Fonctions de visualisation (courbes empiriques vs théorie)
-│   └── cpp/
-│       ├── linear_hash.hpp/cpp      # Hachage linéaire F2 en C++ (arithmétique bit-à-bit,
-│       │                            #   blocs uint64)
-│       ├── trial_maxload.hpp/cpp    # Un trial : génère S, calcule h(x) pour chaque x,
-│       │                            #   estime le max-load via Space-Saving C++
-│       ├── space_saving.hpp         # Algorithme Space-Saving C++ (tas min paresseux,
-│       │                            #   clé uint64 par fingerprint)
-│       ├── parallel_trials.hpp      # Parallélisation des trials via std::thread
-│       ├── samplers.hpp             # Génération de vecteurs aléatoires en C++
-│       ├── bindings.cpp             # Bindings pybind11 : expose LinearHash et
-│       │                            #   run_trials_maxload à Python
-│       └── CMakeLists.txt           # Configuration de compilation du module fasthash
-├── tests/
-│   ├── conftest.py         # Fixtures partagées pytest
-│   ├── test_sampling.py    # Tests unitaires pour les distributions d'échantillonnage
-│   ├── test_py.py          # Tests du hachage Python
-│   ├── test_cpp.py         # Tests du module C++ fasthash
-│   └── example.py          # Exemple : affiche x, M, h(x)
-├── compare.py                   # Benchmark Python vs C++ : débit (ns/op, M ops/s),
-│                                #   speedup single/batch, trials multi-threadés
-├── DD22.pdf                     # Référence bibliographique
-├── JKZ25.pdf                    # Référence bibliographique
-├── TZ23.pdf                     # Référence bibliographique
-├── Observing_Linear_Hashing.pdf # Rapport du projet
+│   ├── hashing/                     # Part 1 : hachage linéaire sur F2
+│   │   ├── linear_f2.py            #   Implémentation Python et C++
+│   │   └── sampling.py             #   Générateurs de vecteurs aléatoires
+│   ├── experiments/                 # Part 1 : expériences max-load
+│   │   ├── runner.py               #   Point d'entrée principal des expériences
+│   │   ├── maxload.py              #   Algorithme Space-Saving (Python)
+│   │   └── mlShower.py             #   Affichage de la distribution du max-load
+│   ├── crypto/                      # Part 2 : schéma multi-signatures MuSig2-H
+│   │   ├── curve.py                #   Courbe elliptique Curve25519
+│   │   ├── lhf.py                  #   Fonction de hachage linéaire Pedersen
+│   │   ├── musig2h.py              #   8 algorithmes MuSig2-H + 3 hachages
+│   │   ├── signer.py               #   Classe Signer (état d'un participant)
+│   │   └── parallel_signing.py     #   Coordinateur de protocole (7 étapes)
+│   └── cpp/                         # Part 1 : backend C++ (pybind11)
+│       ├── linear_hash.hpp/cpp     #   Hachage linéaire F2 en C++
+│       ├── trial_maxload.hpp/cpp   #   Un trial avec Space-Saving C++
+│       ├── space_saving.hpp        #   Algorithme Space-Saving C++
+│       ├── parallel_trials.hpp     #   Parallélisation via std::thread
+│       ├── samplers.hpp            #   Génération de vecteurs aléatoires C++
+│       ├── bindings.cpp            #   Bindings pybind11
+│       └── CMakeLists.txt          #   Configuration CMake
+├── tests/                           # Tests (Part 1 : 90, Part 2 : 82)
+│   ├── conftest.py
+│   ├── test_sampling.py            #   Distributions d'échantillonnage
+│   ├── test_py.py                  #   Hachage Python
+│   ├── test_cpp.py                 #   Module C++ fasthash
+│   ├── test_curve.py               #   Courbe elliptique (21 tests)
+│   ├── test_lhf.py                 #   Fonction de hachage linéaire (15 tests)
+│   ├── test_musig2h.py             #   Schéma de signature (18 tests)
+│   ├── test_signer.py              #   Classe Signer (14 tests)
+│   ├── test_parallel.py            #   Coordinateur de protocole (9 tests)
+│   └── example.py
+├── docs/                            # Documentation
+│   ├── part2_background.md         #   Contexte de recherche Part 2
+│   └── pari_thread_safety.md       #   Analyse sécurité threads PARI
+├── papers/                          # Références bibliographiques (PDF)
+├── profiling/                       # Résultats de profilage (CPU/mémoire)
+├── scripts/
+│   └── compare.py                  # Benchmark Python vs C++
+├── data/                            # Résultats d'expériences
 └── .gitignore
 ```
 
@@ -154,20 +157,19 @@ git push origin dev-<nom>
 
 ---
 
-## Tests
+## Commandes (Makefile)
 
-### Prérequis
-
-Python ≥ 3.10 et `pytest` installé.
-
-### Lancer les tests
+Le projet utilise un `Makefile` comme point d'entrée unifié. Lancer `make help` pour la liste complète :
 
 ```bash
-# Depuis la racine du projet
-pytest
-
-# Ou pour un fichier de test spécifique
-pytest tests/test_sampling.py
+make help           # Afficher toutes les commandes disponibles
+make build-cpp      # Compiler le backend C++ (pybind11, Python 3.13)
+make test-part1     # Tests Part 1 (compile C++ automatiquement)
+make test-part2     # Tests Part 2 (nécessite SageMath)
+make test-all       # Tous les tests
+make run-part1      # Lancer les expériences Part 1
+make demo           # Simulation du protocole MuSig2-H
+make clean          # Nettoyer les artefacts de compilation
 ```
 
 ### Exemple d'exécution
@@ -175,39 +177,7 @@ pytest tests/test_sampling.py
 Le fichier **`tests/example.py` affiche des exemples de résultats** `x, M, h(x)` avec cet algorithme.
 
 ```bash
-# Depuis la racine du projet
 python3 tests/example.py
-```
-
----
-
-## Compilation du module C++
-
-### Compilation
-
-```bash
-# Depuis la racine
-cd Observing-Linear-Hashing/
-cmake -S src/cpp -B src/cpp/build -DCMAKE_BUILD_TYPE=Release
-cmake --build src/cpp/build -j
-
-# Vérifier que la compilation a réussi
-python3 -c "import fasthash; print(fasthash.__file__)"
-# Exemple de sortie : Observing-Linear-Hashing/fasthash.cpython-313-darwin.so
-```
-
----
-
-## Expériences
-
-Les expériences permettent d'évaluer le comportement des fonctions de hachage linéaires dans le problème classique "balls into bins".
-
-### Lancer une expérience
-
-Depuis la racine du projet :
-
-```bash
-python -m src.experiments.runner
 ```
 
 ---
@@ -257,26 +227,22 @@ Pour **`l` petit (par exemple** **`l ≤ 10`, soit ≤ 1024 bacs), un comptage e
 > **Note :** Cette section nécessite **Python 3.13** .
 
 ```bash
-python3 -m venv .venv313
 source .venv313/bin/activate
-python -V   # Vérifier que la version est bien 3.13.x
-```
 
-```bash
 # Génération d'un flamegraph CPU
-sudo py-spy record -o profile.svg -- python -m src.experiments.runner
-open profile.svg
+sudo py-spy record -o profiling/profile.svg -- python -m src.experiments.runner
+open profiling/profile.svg
 ```
 
 ### Profilage mémoire
 
 ```bash
 # Étape 1 : collecter les données mémoire
-python -m memray run -o memray.bin -m src.experiments.runner
+python -m memray run -o profiling/memray.bin -m src.experiments.runner
 
 # Étape 2 : générer le rapport flamegraph HTML
-python -m memray flamegraph memray.bin -o memray-flamegraph.html
+python -m memray flamegraph profiling/memray.bin -o profiling/memray-flamegraph.html
 
 # Étape 3 : ouvrir le rapport dans le navigateur
-open memray-flamegraph.html
+open profiling/memray-flamegraph.html
 ```
