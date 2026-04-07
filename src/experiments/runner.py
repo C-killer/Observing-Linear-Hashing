@@ -166,17 +166,17 @@ def run_experiment_grid_not_fixed_S(
 
             print(f"\n=== u={u}, l={l}, m={m}, dist={dist} ===")
 
-            # 初始化统计
+            # initialize statistics
             exceed = {r: 0.0 for r in r_values}
             thresholds = {r: threshold(l, r) for r in r_values}
 
             for t in range(trials):
 
-                # --- 每个 trial 新的 seed ---
+                # --- new seed for each trial ---
                 seed_S = rng.randrange(1 << 30)
                 seed_h = rng.randrange(1 << 30)
 
-                # 生成新的 S（generator）
+                # generate new S (generator)
                 S_iter = make_S_iter(
                     m=m,
                     u=u,
@@ -185,22 +185,22 @@ def run_experiment_grid_not_fixed_S(
                     **dist_params,
                 )
 
-                # 新 hash
+                # new hash
                 h = hash_f2(l=l, u=u, seed=seed_h)
 
-                # 只算一次 max-load
+                # compute max-load once
                 ml, _ = Maxload(u=u, l=l, h=h).max_load(
                     S_iter,
                     k=50_000,
                     chunk_size=65536,  # 4096/8192/16384/32768/65536
                 )
 
-                # 对所有 r 判阈值
+                # check threshold for all r values
                 for r in r_values:
                     if ml >= thresholds[r]:
                         exceed[r] += 1.0
 
-            # 计算概率
+            # compute probabilities
             curve = {}
             for r in r_values:
                 p_hat = exceed[r] / trials
@@ -322,5 +322,5 @@ if __name__ == "__main__":
         plot_profile_over_l(results_by_l, r_values)
 
     print()
-    print("提示：make run-part1 ARGS=\"-h\" 查看所有参数")
-    print("示例：make run-part1 ARGS=\"-u 3000 5000 -l 20 30 -t 10000\"")
+    print("Hint: make run-part1 ARGS=\"-h\" to see all parameters")
+    print("Example: make run-part1 ARGS=\"-u 3000 5000 -l 20 30 -t 10000\"")

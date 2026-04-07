@@ -24,7 +24,7 @@
 #             y = self.h.h(x)
 #             counts[y] += 1
 #         return dict(counts)
-#     #返回最大桶
+#     # return the max bucket
 #     def max_load(self, S):
 #         counts = self.compute_counts(S)
 #         return max(counts.values(), default=0)
@@ -46,13 +46,18 @@ def _chunked(iterable: Iterable[int], chunk_size: int) -> Iterator[List[int]]:
     if buf:
         yield buf
 
-"""
- 把 “精确统计 2^l 个桶的计数” 换成 “只追踪最可能成为最大桶的少数候选桶”，用的是经典的 Space-Saving / Frequent algorithm(重频项近似) 
+“””
+Replace “exact counting of all 2^l buckets” with “tracking only the few candidate buckets
+most likely to be the max bucket”, using the classic Space-Saving / Frequent algorithm
+(approximate heavy hitters).
 
- 思路：当 l 很大（桶数 2^l 爆炸）时，我们不再维护完整的 counts, 而是维护一个大小为 k 的候选表 table,并用最小堆在满员时“踢掉”当前估计最小的桶。
-    这非常契合项目里“l 很大导致运算/内存不可承受”的痛点：项目要求是评估 max-load(最大桶负载) 的行为, 而不是必须输出每个桶的精确计数分布。
-    该方案就是把 max-load 的估计做成 流式(single pass)、内存 O(k)
-"""
+Idea: when l is large (2^l buckets explodes), instead of maintaining full counts,
+we maintain a candidate table of size k and use a min-heap to evict the smallest
+estimated bucket when full. This fits the project's pain point where large l makes
+exact computation infeasible: we only need to estimate max-load (maximum bucket load),
+not output the exact count distribution. This makes max-load estimation streaming
+(single pass) with O(k) memory.
+“””
 class Maxload:
     """
     M(S,h) = max_y |{x in S : h(x)=y}|
@@ -71,7 +76,7 @@ class Maxload:
         """
         Space-Saving + min-heap (tas min) avec suppression paresseuse (lazy deletion).
         chunk_size = 8192 / 16384 / 32768 ...
-            固定 u/l/k, 跑 4096/8192/16384/32768/65536, 看 wall time, 选最小的那个
+            Fix u/l/k, run with 4096/8192/16384/32768/65536, check wall time, pick the fastest
 
         On maintient:
           - table[y] = (c, e) : c = compteur, e = erreur

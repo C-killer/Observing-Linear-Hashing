@@ -1,4 +1,4 @@
-"""lhf.py 的单元测试：验证 Pedersen LHF 满足 Definition 1。"""
+"""Unit tests for lhf.py: verify Pedersen LHF satisfies Definition 1."""
 
 import random
 from src.crypto.curve import G, Z, O, q, E, scalar_mult, point_add, random_scalar
@@ -7,7 +7,7 @@ from sage.all import Integer
 
 
 class TestLinearity:
-    """F 是 Z_q-线性映射。"""
+    """F is a Z_q-linear map."""
 
     def test_homomorphism_add(self):
         """F(a + b) = F(a) + F(b)"""
@@ -26,7 +26,7 @@ class TestLinearity:
         assert lhs == rhs
 
     def test_linearity_random(self):
-        """随机测试线性性：F(a+b) = F(a) + F(b)"""
+        """Random linearity test: F(a+b) = F(a) + F(b)"""
         rng = random.Random(42)
         for _ in range(10):
             a1, a2 = random_scalar(rng), random_scalar(rng)
@@ -37,7 +37,7 @@ class TestLinearity:
 
 
 class TestEpimorphism:
-    """F 是满同态：像覆盖整个 E[q]。"""
+    """F is an epimorphism: image covers all of E[q]."""
 
     def test_G_in_image(self):
         """G = F(1, 0)"""
@@ -48,14 +48,14 @@ class TestEpimorphism:
         assert F(0, 1) == Z
 
     def test_arbitrary_point_in_image(self):
-        """任意 k·G + j·Z 都在像中。"""
+        """Any k·G + j·Z is in the image."""
         k, j = 12345, 67890
         P = point_add(scalar_mult(k, G), scalar_mult(j, Z))
         assert F(k, j) == P
 
 
 class TestNonMonomorphism:
-    """F 不是单射：存在非零核元素。"""
+    """F is not injective: non-trivial kernel elements exist."""
 
     def test_F_zero_zero_is_identity(self):
         """F(0, 0) = O"""
@@ -63,43 +63,43 @@ class TestNonMonomorphism:
 
     def test_kernel_nontrivial(self):
         """
-        核非平凡：若 z* = (log_G(Z), -1)，则 F(z*) = O。
-        我们不知道 log_G(Z)，但可以验证 F(a, b) = O 当且仅当
-        a·G = -b·Z，即存在非零解。
+        Non-trivial kernel: if z* = (log_G(Z), -1), then F(z*) = O.
+        We don't know log_G(Z), but can verify F(a, b) = O iff
+        a·G = -b·Z, i.e., non-zero solutions exist.
 
-        等价验证：F(0, q) = 0·G + q·Z = O（因为 Z 的阶是 q）。
-        这说明 (0, q) ≡ (0, 0) mod q 在核中，
-        但真正的非平凡核元素需要 DL。
+        Equivalent check: F(0, q) = 0·G + q·Z = O (since Z has order q).
+        This means (0, q) ≡ (0, 0) mod q is in the kernel,
+        but truly non-trivial kernel elements require DL.
 
-        我们用 F 的维度论证：D = Z_q²（维度2），R = E[q]（维度1），
-        核维度 = 2 - 1 = 1 > 0。
-        直接验证：取两个不同的原像映射到同一点。
+        Dimension argument: D = Z_q² (dim 2), R = E[q] (dim 1),
+        kernel dim = 2 - 1 = 1 > 0.
+        Direct verification: find two different preimages mapping to the same point.
         """
-        # F(1, 0) = G, 找另一组 (a, b) 使得 F(a, b) = G
-        # 即 a·G + b·Z = G => (a-1)·G + b·Z = O
-        # 这需要 DL，所以我们验证 non-injectivity 的另一种方式：
-        # F 的定义域 Z_q² 有 q² 个元素，像 E[q] 最多 q 个元素
-        # 因此 F 不可能是单射（鸽巢原理）
+        # F(1, 0) = G, find another (a, b) such that F(a, b) = G
+        # i.e., a·G + b·Z = G => (a-1)·G + b·Z = O
+        # This requires DL, so we verify non-injectivity another way:
+        # Domain Z_q² has q² elements, image E[q] has at most q elements
+        # Therefore F cannot be injective (pigeonhole principle)
         #
-        # 程序化验证：对随机 x，F(x1, x2) = F(x1 + q, x2)
-        # （因为 G 的阶是 q）
+        # Programmatic check: for any x, F(x1, x2) = F(x1 + q, x2)
+        # (since G has order q)
         x1, x2 = 999, 888
         assert F(x1, x2) == F(x1 + q, x2)
-        # 同理第二个分量
+        # same for the second component
         assert F(x1, x2) == F(x1, x2 + q)
 
     def test_two_preimages(self):
-        """同一个像有多个原像。"""
+        """The same image has multiple preimages."""
         P = F(42, 0)  # 42·G
-        # F(42, 0) = F(42 + 0, 0 + 0)，换一种：
-        # F(0, 0) + F(42, 0) 和 F(41, 0) + F(1, 0)
-        # 直接构造：F(42, q-1) + F(0, 1) 只是 F(42, q-1+1) = F(42, 0)
-        # 用不同的分解验证
+        # F(42, 0) = F(42 + 0, 0 + 0), alternatively:
+        # F(0, 0) + F(42, 0) and F(41, 0) + F(1, 0)
+        # Direct construction: F(42, q-1) + F(0, 1) is just F(42, q-1+1) = F(42, 0)
+        # verify using a different decomposition
         assert F(42, 0) == point_add(F(20, 0), F(22, 0))
 
 
 class TestFVec:
-    """F_vec 的接口测试。"""
+    """Interface tests for F_vec."""
 
     def test_tuple(self):
         assert F_vec((10, 20)) == F(10, 20)
@@ -109,7 +109,7 @@ class TestFVec:
 
 
 class TestFKey:
-    """F_key 密钥空间限制。"""
+    """F_key restricted to key space."""
 
     def test_fkey_equals_f_with_zero(self):
         """F_key(sk) = F(sk, 0)"""
@@ -122,6 +122,6 @@ class TestFKey:
         assert F_key(sk) == scalar_mult(sk, G)
 
     def test_fkey_injective(self):
-        """F|_{D_key} 是双射：不同 sk 映射到不同 pk。"""
+        """F|_{D_key} is bijective: different sk map to different pk."""
         sk1, sk2 = 100, 200
         assert F_key(sk1) != F_key(sk2)

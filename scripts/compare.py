@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """
-compare.py — Python vs C++ 线性哈希性能对比 Benchmark
+compare.py — Python vs C++ linear hashing performance benchmark
 
-对比 HashF2Python 和 HashF2Cpp 两个实现的性能：
-  - 单元素哈希延迟（ns/op）
-  - 批量哈希吞吐量（MOPS）
-  - C++ 多线程并行试验的扩展性
+Compares HashF2Python and HashF2Cpp implementations:
+  - Single-element hashing latency (ns/op)
+  - Batch hashing throughput (MOPS)
+  - C++ multi-threaded trial scalability
 
-用法：从项目根目录运行
+Usage: run from project root
   python scripts/compare.py [--u U] [--l L] [--n N]
 """
 from __future__ import annotations
