@@ -1,4 +1,4 @@
-"""curve.py 的单元测试。"""
+"""Unit tests for curve.py."""
 
 import random
 from src.crypto.curve import (
@@ -9,7 +9,7 @@ from sage.all import Integer
 
 
 class TestCurveBasics:
-    """有限域和曲线基本性质。"""
+    """Finite field and curve basic properties."""
 
     def test_p_is_prime(self):
         assert Integer(p).is_prime()
@@ -18,7 +18,7 @@ class TestCurveBasics:
         assert p == 2**255 - 19
 
     def test_curve_order_cofactor(self):
-        """群阶 = 8q，q 为素数。"""
+        """Group order = 8q, where q is prime."""
         assert E.order() == 8 * q
         assert Integer(q).is_prime()
 
@@ -39,7 +39,7 @@ class TestCurveBasics:
 
 
 class TestSubgroupOrder:
-    """G 和 Z 在素数阶子群中。"""
+    """G and Z are in the prime-order subgroup."""
 
     def test_G_order(self):
         assert q * G == O
@@ -48,13 +48,13 @@ class TestSubgroupOrder:
         assert q * Z == O
 
     def test_G_not_small_order(self):
-        """G 的阶不是 q 的真因子。"""
+        """G's order is not a proper divisor of q."""
         for d in [2, 4, 8]:
             assert (q // d) * G != O if q % d == 0 else True
 
 
 class TestArithmetic:
-    """标量乘法和点加法。"""
+    """Scalar multiplication and point addition."""
 
     def test_scalar_mult_identity(self):
         assert scalar_mult(1, G) == G
@@ -94,7 +94,7 @@ class TestArithmetic:
 
 
 class TestRandomScalar:
-    """随机标量生成。"""
+    """Random scalar generation."""
 
     def test_range(self):
         rng = random.Random(42)

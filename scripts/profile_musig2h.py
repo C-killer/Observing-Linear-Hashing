@@ -1,14 +1,14 @@
 #!/usr/bin/env sage -python
 """
-profile_musig2h.py — MuSig2-H 性能分析与 PARI 线程安全 Profiling
+profile_musig2h.py — MuSig2-H performance analysis & PARI thread safety profiling
 
-四个实验：
-  A. 线程崩溃复现（ThreadPoolExecutor → segfault）
-  B. 顺序执行基准测试（签名者数量扩展性）
-  C. 阶段耗时分解（可并行 vs 顺序占比）
-  D. Amdahl's Law 理论加速比分析
+Four experiments:
+  A. Thread crash reproduction (ThreadPoolExecutor → segfault)
+  B. Sequential execution benchmark (signer count scalability)
+  C. Phase timing breakdown (parallelizable vs sequential ratio)
+  D. Amdahl's Law theoretical speedup analysis
 
-用法：从项目根目录运行
+Usage: run from project root
   sage -python scripts/profile_musig2h.py [--skip-crash] [--repeats N] [--warmup N]
 """
 from __future__ import annotations
@@ -20,12 +20,12 @@ import subprocess
 import sys
 import time
 
-# 确保从项目根目录导入 src 包
+# ensure src package is importable from project root
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from src.crypto.parallel_signing import run_protocol
 
-# ─── 常量 ───────────────────────────────────────────────────────────────────
+# ─── Constants ────────────────────────────────────────────────────────────────
 
 PARALLEL_PHASES = ["keygen", "presign", "sign"]
 SEQUENTIAL_PHASES = ["keyagg", "preagg", "signagg", "verify"]
@@ -35,15 +35,15 @@ PROFILING_DIR = os.path.join(os.path.dirname(__file__), "..", "profiling", "part
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# 实验 A：线程崩溃复现
+# Experiment A: Thread crash reproduction
 # ═══════════════════════════════════════════════════════════════════════════
 
 def thread_crash_demo(repeats=5):
-    """通过 subprocess 调用 worker，统计 ThreadPoolExecutor 崩溃率。"""
+    """Call worker via subprocess, count ThreadPoolExecutor crash rate."""
     print("=" * 65)
-    print("实验 A：PARI 线程安全崩溃复现")
+    print("Experiment A: PARI thread safety crash reproduction")
     print("=" * 65)
-    print("方法：subprocess 隔离调用 ThreadPoolExecutor 并发构造 Signer")
+    print("Method: subprocess isolation calling ThreadPoolExecutor to concurrently construct Signer")
     print()
 
     worker = os.path.join(os.path.dirname(__file__), "thread_crash_worker.py")
@@ -75,22 +75,22 @@ def thread_crash_demo(repeats=5):
         results.append((n_signers, n_threads, crashes, repeats, codes))
 
     print()
-    print("cysignals 捕获 SIGSEGV 后抛出 SignalError，进程以 exit code 1 终止。")
-    print("根因：PARI 全局栈 (avma) 无锁保护，多线程并发写入导致内存损坏。")
+    print("cysignals catches SIGSEGV and raises SignalError, process terminates with exit code 1.")
+    print("Root cause: PARI global stack (avma) has no lock protection, concurrent multi-thread writes cause memory corruption.")
     print()
     return results
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# 实验 B：顺序执行基准测试
+# Experiment B: Sequential execution benchmark
 # ═══════════════════════════════════════════════════════════════════════════
 
 def bench_scalability(n_list, warmup=2, repeats=5):
-    """测量不同签名者数量下各阶段的中位数耗时。"""
+    """Measure median timing for each phase across different signer counts."""
     print("=" * 65)
-    print("实验 B：顺序执行基准测试（签名者数量扩展性）")
+    print("Experiment B: Sequential execution benchmark (signer count scalability)")
     print("=" * 65)
-    print(f"参数：warmup={warmup}, repeats={repeats}, seed=42")
+    print(f"Parameters: warmup={warmup}, repeats={repeats}, seed=42")
     print()
 
     all_data = []  # [(n, {phase: median_ms})]
@@ -114,7 +114,7 @@ def bench_scalability(n_list, warmup=2, repeats=5):
         medians["total"] = statistics.median(total_times)
         all_data.append((n, medians))
 
-    # 打印表格
+    # print table
     header = f"{'n':>4s}"
     for p in ALL_PHASES:
         header += f"  {p:>8s}"
@@ -130,19 +130,19 @@ def bench_scalability(n_list, warmup=2, repeats=5):
         print(row)
 
     print()
-    print("单位：毫秒（ms），取 5 次运行的中位数")
+    print("Unit: milliseconds (ms), median of 5 runs")
     print()
     return all_data
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# 实验 C：阶段耗时分解
+# Experiment C: Phase timing breakdown
 # ═══════════════════════════════════════════════════════════════════════════
 
 def phase_breakdown(all_data):
-    """从扩展性数据中分析可并行 vs 顺序阶段的占比。"""
+    """Analyze parallelizable vs sequential phase ratio from scalability data."""
     print("=" * 65)
-    print("实验 C：阶段耗时分解（可并行 vs 顺序）")
+    print("Experiment C: Phase timing breakdown (parallelizable vs sequential)")
     print("=" * 65)
     print()
 
@@ -163,30 +163,30 @@ def phase_breakdown(all_data):
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# 实验 D：Amdahl's Law 理论加速比
+# Experiment D: Amdahl's Law theoretical speedup
 # ═══════════════════════════════════════════════════════════════════════════
 
 def amdahl_analysis(breakdown_data):
     """
-    计算理论并行加速比 vs 实际（始终 1x）。
+    Compute theoretical parallel speedup vs actual (always 1x).
 
-    理论依据：Amdahl's Law
+    Based on Amdahl's Law:
       S(n) = 1 / ((1-f) + f/n)
-    参考：G. M. Amdahl, "Validity of the Single Processor Approach to
+    Reference: G. M. Amdahl, "Validity of the Single Processor Approach to
     Achieving Large Scale Computing Capabilities", AFIPS 1967, pp. 483-485.
     """
     print("=" * 65)
-    print("实验 D：Amdahl's Law 理论加速比分析")
+    print("Experiment D: Amdahl's Law theoretical speedup analysis")
     print("=" * 65)
     print()
 
-    # 用最大 n 的数据来计算并行比例（最稳定）
+    # use data from max n to compute parallel ratio (most stable)
     n_ref, t_par, t_seq, t_total, f_pct = breakdown_data[-1]
     f = t_par / t_total if t_total > 0 else 0
 
-    print(f"参考数据点：n={n_ref}")
-    print(f"可并行比例 f = {f:.4f} ({f_pct:.1f}%)")
-    print(f"顺序比例 1-f = {1 - f:.4f} ({100 - f_pct:.1f}%)")
+    print(f"Reference data point: n={n_ref}")
+    print(f"Parallelizable fraction f = {f:.4f} ({f_pct:.1f}%)")
+    print(f"Sequential fraction 1-f = {1 - f:.4f} ({100 - f_pct:.1f}%)")
     print()
 
     workers_list = [1, 2, 4, 8, 10, 16, 32]
@@ -202,33 +202,33 @@ def amdahl_analysis(breakdown_data):
         amdahl_data.append((w, s_theory, s_actual))
 
     print()
-    print("Actual 始终为 1.00x：PARI 全局栈非线程安全，无法并行。")
+    print("Actual is always 1.00x: PARI global stack is not thread-safe, cannot parallelize.")
     print()
     return f, amdahl_data
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# 图表生成
+# Chart generation
 # ═══════════════════════════════════════════════════════════════════════════
 
 def generate_charts(all_data, f, amdahl_data):
-    """用 matplotlib 生成 PNG 图表到 profiling/part2/。"""
+    """Generate PNG charts to profiling/part2/ using matplotlib."""
     try:
         import matplotlib
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
     except ImportError:
-        print("[WARN] matplotlib 不可用，跳过图表生成")
+        print("[WARN] matplotlib not available, skipping chart generation")
         return
 
     os.makedirs(PROFILING_DIR, exist_ok=True)
 
-    # ── 图 1：扩展性（签名者数量 vs 各阶段耗时）──────────────────────
+    # ── Chart 1: Scalability (signer count vs phase timing) ──────────────────
     fig, ax = plt.subplots(figsize=(10, 6))
 
     ns = [d[0] for d in all_data]
 
-    # 可并行阶段用实线，顺序阶段用虚线
+    # parallelizable phases with solid lines, sequential with dashed
     for phase in PARALLEL_PHASES:
         ys = [d[1][phase] for d in all_data]
         ax.plot(ns, ys, "o-", label=f"{phase} (parallelizable)", linewidth=2)
@@ -252,9 +252,9 @@ def generate_charts(all_data, f, amdahl_data):
     fig.tight_layout()
     fig.savefig(path1, dpi=150)
     plt.close(fig)
-    print(f"[Chart] 扩展性图表已保存：{path1}")
+    print(f"[Chart] Scalability chart saved: {path1}")
 
-    # ── 图 2：Amdahl's Law ────────────────────────────────────────────
+    # ── Chart 2: Amdahl's Law ────────────────────────────────────────────
     fig, ax = plt.subplots(figsize=(8, 5))
 
     workers = [d[0] for d in amdahl_data]
@@ -264,7 +264,7 @@ def generate_charts(all_data, f, amdahl_data):
     ax.plot(workers, theoretical, "o-", label=f"Theoretical (f={f:.1%})", linewidth=2, color="tab:blue")
     ax.plot(workers, actual, "s--", label="Actual (PARI limitation)", linewidth=2, color="tab:red")
 
-    # 填充"损失"区域
+    # fill "lost speedup" area
     ax.fill_between(workers, actual, theoretical, alpha=0.15, color="tab:red",
                      label="Lost speedup (PARI unsafe)")
 
@@ -280,7 +280,7 @@ def generate_charts(all_data, f, amdahl_data):
     fig.tight_layout()
     fig.savefig(path2, dpi=150)
     plt.close(fig)
-    print(f"[Chart] Amdahl 图表已保存：{path2}")
+    print(f"[Chart] Amdahl chart saved: {path2}")
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -289,38 +289,38 @@ def generate_charts(all_data, f, amdahl_data):
 
 def main():
     ap = argparse.ArgumentParser(description="MuSig2-H profiling & PARI thread safety analysis")
-    ap.add_argument("--skip-crash", action="store_true", help="跳过线程崩溃实验（加快调试）")
-    ap.add_argument("--warmup", type=int, default=2, help="预热轮数（默认 2）")
-    ap.add_argument("--repeats", type=int, default=5, help="测量轮数（默认 5）")
-    ap.add_argument("--no-chart", action="store_true", help="跳过图表生成")
+    ap.add_argument("--skip-crash", action="store_true", help="skip thread crash experiment (faster debugging)")
+    ap.add_argument("--warmup", type=int, default=2, help="warmup rounds (default: 2)")
+    ap.add_argument("--repeats", type=int, default=5, help="measurement rounds (default: 5)")
+    ap.add_argument("--no-chart", action="store_true", help="skip chart generation")
     args = ap.parse_args()
 
     print()
     print("╔══════════════════════════════════════════════════════════════╗")
-    print("║     MuSig2-H 性能分析 & PARI 线程安全 Profiling            ║")
+    print("║     MuSig2-H Profiling & PARI Thread Safety Analysis       ║")
     print("╚══════════════════════════════════════════════════════════════╝")
     print()
 
-    # 实验 A
+    # Experiment A
     if not args.skip_crash:
         thread_crash_demo(repeats=5)
     else:
-        print("[SKIP] 线程崩溃实验（--skip-crash）\n")
+        print("[SKIP] Thread crash experiment (--skip-crash)\n")
 
-    # 实验 B
+    # Experiment B
     n_list = [1, 2, 3, 5, 8, 10, 15, 20]
     all_data = bench_scalability(n_list, warmup=args.warmup, repeats=args.repeats)
 
-    # 实验 C
+    # Experiment C
     breakdown_data = phase_breakdown(all_data)
 
-    # 实验 D
+    # Experiment D
     f, amdahl_data = amdahl_analysis(breakdown_data)
 
-    # 图表
+    # Charts
     if not args.no_chart:
         print("=" * 65)
-        print("图表生成")
+        print("Chart generation")
         print("=" * 65)
         generate_charts(all_data, f, amdahl_data)
 

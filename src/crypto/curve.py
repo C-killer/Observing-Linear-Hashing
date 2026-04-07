@@ -1,17 +1,17 @@
 """
-Curve25519 椭圆曲线封装（Montgomery 形式），基于 SageMath。
+Curve25519 elliptic curve wrapper (Montgomery form), based on SageMath.
 
-提供：
-- 有限域 F_p, p = 2^255 - 19
-- 曲线 E: y² = x³ + 486662x² + x over F_p
-- 基点 G (x=9)
-- 独立生成元 Z（透明 hash-to-curve）
-- 群的阶 q（素数阶子群）
+Provides:
+- Finite field F_p, p = 2^255 - 19
+- Curve E: y² = x³ + 486662x² + x over F_p
+- Base point G (x=9)
+- Independent generator Z (transparent hash-to-curve)
+- Group order q (prime-order subgroup)
 """
 
 from sage.all import GF, EllipticCurve, Integer, ZZ
 
-# ── 有限域 ──
+# ── Finite field ──
 p = Integer(2**255 - 19)
 Fp = GF(p)
 
@@ -19,20 +19,20 @@ Fp = GF(p)
 A = Integer(486662)
 E = EllipticCurve(Fp, [0, A, 0, 1, 0])
 
-# 群阶 = 8 * q，q 为大素数
+# Group order = 8 * q, where q is a large prime
 _order = E.order()
 q = _order // 8  # cofactor = 8
 
-# ── 基点 G ──
-# Curve25519 标准基点 x=9，取 y 为正值
+# ── Base point G ──
+# Curve25519 standard base point x=9, pick the smaller y
 _G_candidates = E.lift_x(Fp(9), all=True)
-G = min(_G_candidates, key=lambda P: ZZ(P[1]))  # 取较小的 y
+G = min(_G_candidates, key=lambda P: ZZ(P[1]))  # pick the smaller y
 
 
 def _hash_to_curve(tag: str):
     """
-    透明 hash-to-curve：将标签字符串映射到 E 上的点。
-    反复 hash 直到找到合法的 x 坐标，然后 lift 到曲线上。
+    Transparent hash-to-curve: maps a tag string to a point on E.
+    Repeatedly hashes until a valid x-coordinate is found, then lifts onto the curve.
     """
     from hashlib import sha256 as _sha256
     for counter in range(256):
@@ -40,17 +40,17 @@ def _hash_to_curve(tag: str):
         x = Fp(Integer(int.from_bytes(h, "little")) % p)
         try:
             pts = E.lift_x(x, all=True)
-            # 取较小的 y，确保确定性
+            # pick the smaller y for determinism
             return min(pts, key=lambda P: ZZ(P[1]))
         except ValueError:
             continue
     raise RuntimeError(f"hash_to_curve failed for tag={tag!r}")
 
 
-# ── 独立生成元 Z ──
+# ── Independent generator Z ──
 Z = _hash_to_curve("Curve25519-Pedersen-Z")
 
-# ── 确保 G, Z 都在素数阶子群中（乘以 cofactor 8）──
+# ── Ensure G, Z are in the prime-order subgroup (multiply by cofactor 8) ──
 G = 8 * G
 Z = 8 * Z
 assert G != E(0), "G must not be the identity"
@@ -60,22 +60,22 @@ assert q * Z == E(0), "Z must have order q"
 
 
 def scalar_mult(k, P):
-    """标量乘法 k·P，k 为整数，P 为曲线点。"""
+    """Scalar multiplication k·P, where k is an integer and P is a curve point."""
     return Integer(k) * P
 
 
 def point_add(P, Q):
-    """曲线点加法 P + Q。"""
+    """Point addition P + Q on the curve."""
     return P + Q
 
 
 def random_scalar(rng=None):
-    """随机生成 Z_q 中的标量（1 <= s < q）。"""
+    """Generate a random scalar in Z_q (1 <= s < q)."""
     if rng is None:
         from sage.all import randint
         return Integer(randint(1, int(q) - 1))
     return Integer(rng.randint(1, int(q) - 1))
 
 
-# ── 单位元 ──
+# ── Identity element ──
 O = E(0)

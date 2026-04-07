@@ -1,8 +1,8 @@
 """
-Signer：封装单个 MuSig2-H 签名参与者的状态和流程。
+Signer: wraps the state and workflow of a single MuSig2-H signing participant.
 
-薄封装层，内部调用 musig2h.py 的无状态函数，
-管理密钥、nonce、协议阶段，防止误用和 nonce 复用。
+Thin wrapper that internally calls stateless functions from musig2h.py,
+managing keys, nonces, and protocol phases to prevent misuse and nonce reuse.
 """
 
 import random
@@ -12,74 +12,74 @@ from src.crypto.musig2h import keygen, presign, sign
 
 class Signer:
     """
-    单个 MuSig2-H 签名参与者。
+    A single MuSig2-H signing participant.
 
-    生命周期：
-        构造（KeyGen）→ set_peers → presign → receive_agg_nonce → sign
-        如需再次签名，须重新 presign → receive_agg_nonce → sign
+    Lifecycle:
+        construct (KeyGen) → set_peers → presign → receive_agg_nonce → sign
+        To sign again, must redo presign → receive_agg_nonce → sign
     """
 
     def __init__(self, seed=None):
         """
-        创建签名者，自动执行 KeyGen。
+        Create a signer, automatically executes KeyGen.
 
-        seed: 随机种子（int 或 None），用于可复现测试。
+        seed: random seed (int or None), for reproducible testing.
         """
         self.rng = random.Random(seed)
         self.sk, self.pk = keygen(self.rng)
 
-        self._peers = None   # 其他签名者的公钥列表
-        self._pp = None      # 自己的 nonce 承诺（公开）
-        self._st = None      # 自己的 nonce 秘密（保密）
-        self._app = None     # 聚合后的 nonce 承诺
+        self._peers = None   # list of other signers' public keys
+        self._pp = None      # own nonce commitments (public)
+        self._st = None      # own nonce secrets (private)
+        self._app = None     # aggregated nonce commitments
 
     def set_peers(self, peer_pks):
         """
-        设置其他签名者的公钥列表（不含自己）。
+        Set the list of other signers' public keys (excluding self).
 
-        peer_pks: 曲线点列表
+        peer_pks: list of curve points
         """
         self._peers = list(peer_pks)
 
     def presign(self):
         """
-        离线预签名：生成 4 组 nonce，返回公开承诺。
+        Offline pre-signing: generate 4 nonce groups, return public commitments.
 
-        返回: pp = (R_1, R_2, R_3, R_4)，曲线点元组
+        Returns: pp = (R_1, R_2, R_3, R_4), tuple of curve points
         """
         self._pp, self._st = presign(self.rng)
-        self._app = None  # 新一轮 nonce，旧的聚合承诺失效
+        self._app = None  # new nonce round, old aggregated commitments invalidated
         return self._pp
 
     def receive_agg_nonce(self, app):
         """
-        接收聚合后的 nonce 承诺。
+        Receive aggregated nonce commitments.
 
-        app: (R_1, R_2, R_3, R_4)，由 preagg() 产出
+        app: (R_1, R_2, R_3, R_4), produced by preagg()
         """
         if self._st is None:
-            raise RuntimeError("必须先调用 presign()")
+            raise RuntimeError("must call presign() first")
         self._app = app
 
     def sign(self, message):
         """
-        在线签名：收到消息后计算部分签名。
+        Online signing: compute partial signature after receiving the message.
 
-        message: bytes，待签消息
-        返回: (R, (s0, s1))
+        message: bytes, the message to sign
+        Returns: (R, (s0, s1))
 
-        签名后 nonce 秘密自动销毁，须重新 presign 才能再次签名。
+        Nonce secrets are automatically destroyed after signing; must presign again to sign again.
         """
         if self._peers is None:
-            raise RuntimeError("必须先调用 set_peers()")
+            raise RuntimeError("must call set_peers() first")
         if self._st is None:
-            raise RuntimeError("必须先调用 presign()")
+            raise RuntimeError("must call presign() first")
         if self._app is None:
-            raise RuntimeError("必须先调用 receive_agg_nonce()")
+            raise RuntimeError("must call receive_agg_nonce() first")
 
         out = sign(self._st, self._app, self.sk, self.pk, message, self._peers)
 
-        # nonce 用完即毁，防止复用泄露私钥
+        # destroy nonce after use, prevent reuse which could leak secret key
         self._st = None
         self._pp = None
         self._app = None

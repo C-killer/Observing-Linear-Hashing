@@ -1,4 +1,4 @@
-"""musig2h.py 的单元测试：验证 MuSig2-H 方案正确性。"""
+"""Unit tests for musig2h.py: verify MuSig2-H scheme correctness."""
 
 import random
 from src.crypto.curve import G, Z, O, q, scalar_mult, point_add
@@ -11,11 +11,11 @@ from src.crypto.musig2h import (
 
 
 # ═══════════════════════════════════════════
-#  辅助函数
+#  Helper functions
 # ═══════════════════════════════════════════
 
 def _full_protocol(n_signers, msg, seed=42):
-    """运行完整的 n 人签名协议，返回 (apk, msg, sigma, all_pks)。"""
+    """Run complete n-party signing protocol, return (apk, msg, sigma, all_pks)."""
     rng = random.Random(seed)
 
     # KeyGen
@@ -90,7 +90,7 @@ class TestKeyGen:
 class TestKeyAgg:
 
     def test_single_key(self):
-        """单人 KeyAgg：apk = H_agg([pk], pk) · pk。"""
+        """Single-signer KeyAgg: apk = H_agg([pk], pk) · pk."""
         _, pk = keygen(random.Random(10))
         apk = key_agg([pk])
         a = H_agg([pk], pk)
@@ -129,14 +129,14 @@ class TestPreSign:
 class TestPreAgg:
 
     def test_preagg_single_signer(self):
-        """单人 PreAgg 等于自己的 pp。"""
+        """Single-signer PreAgg equals own pp."""
         pp, _ = presign(random.Random(3))
         app = preagg([pp])
         for j in range(NU):
             assert app[j] == pp[j]
 
     def test_preagg_two_signers(self):
-        """两人 PreAgg：R_j = R_{1,j} + R_{2,j}。"""
+        """Two-signer PreAgg: R_j = R_{1,j} + R_{2,j}."""
         pp1, _ = presign(random.Random(1))
         pp2, _ = presign(random.Random(2))
         app = preagg([pp1, pp2])
@@ -145,7 +145,7 @@ class TestPreAgg:
 
 
 # ═══════════════════════════════════════════
-#  哈希函数
+#  Hash functions
 # ═══════════════════════════════════════════
 
 class TestHashFunctions:
@@ -156,7 +156,7 @@ class TestHashFunctions:
         assert H_agg(L, pk) == H_agg(L, pk)
 
     def test_H_agg_domain_separation(self):
-        """H_agg 和 H_sig 对相同输入应产生不同输出。"""
+        """H_agg and H_sig should produce different outputs for the same input."""
         _, pk = keygen(random.Random(1))
         h_agg = H_agg([pk], pk)
         h_sig = H_sig(pk, pk, b"test")
@@ -170,62 +170,62 @@ class TestHashFunctions:
         assert h1 != h2
 
     def test_hash_in_range(self):
-        """哈希输出在 [0, q) 中。"""
+        """Hash output is in [0, q)."""
         _, pk = keygen(random.Random(1))
         h = H_agg([pk], pk)
         assert 0 <= h < q
 
 
 # ═══════════════════════════════════════════
-#  完整协议：Sign + SignAgg + Ver
+#  Full protocol: Sign + SignAgg + Ver
 # ═══════════════════════════════════════════
 
 class TestFullProtocol:
 
     def test_single_signer(self):
-        """单人签名验证。"""
+        """Single-signer signature verification."""
         apk, msg, sigma, pks = _full_protocol(1, b"hello")
         assert sigma is not None
         assert ver(apk, msg, sigma)
 
     def test_two_signers(self):
-        """两人签名验证。"""
+        """Two-signer signature verification."""
         apk, msg, sigma, pks = _full_protocol(2, b"hello two")
         assert sigma is not None
         assert ver(apk, msg, sigma)
 
     def test_three_signers(self):
-        """三人签名验证。"""
+        """Three-signer signature verification."""
         apk, msg, sigma, pks = _full_protocol(3, b"hello three")
         assert sigma is not None
         assert ver(apk, msg, sigma)
 
     def test_five_signers(self):
-        """五人签名验证。"""
+        """Five-signer signature verification."""
         apk, msg, sigma, pks = _full_protocol(5, b"hello five", seed=99)
         assert sigma is not None
         assert ver(apk, msg, sigma)
 
     def test_wrong_message_fails(self):
-        """错误消息验证失败。"""
+        """Wrong message fails verification."""
         apk, _, sigma, _ = _full_protocol(2, b"correct msg")
         assert not ver(apk, b"wrong msg", sigma)
 
     def test_wrong_apk_fails(self):
-        """错误聚合公钥验证失败。"""
+        """Wrong aggregated public key fails verification."""
         apk, msg, sigma, _ = _full_protocol(2, b"test")
         fake_apk = scalar_mult(999, G)
         assert not ver(fake_apk, msg, sigma)
 
     def test_tampered_signature_fails(self):
-        """篡改签名验证失败。"""
+        """Tampered signature fails verification."""
         apk, msg, sigma, _ = _full_protocol(2, b"test")
         R, s = sigma
         tampered = (R, ((s[0] + 1) % int(q), s[1]))
         assert not ver(apk, msg, tampered)
 
     def test_different_messages_different_signatures(self):
-        """不同消息产生不同签名。"""
+        """Different messages produce different signatures."""
         apk1, _, sigma1, _ = _full_protocol(2, b"msg A", seed=10)
         apk2, _, sigma2, _ = _full_protocol(2, b"msg B", seed=10)
         assert sigma1[0] != sigma2[0] or sigma1[1] != sigma2[1]
@@ -234,7 +234,7 @@ class TestFullProtocol:
 class TestSignAggFailure:
 
     def test_mismatched_R_returns_none(self):
-        """R 不一致时 SignAgg 返回 None。"""
+        """SignAgg returns None when R values mismatch."""
         rng = random.Random(50)
         sk1, pk1 = keygen(rng)
         sk2, pk2 = keygen(rng)
@@ -247,7 +247,7 @@ class TestSignAggFailure:
         out1 = sign(st1, app, sk1, pk1, msg, [pk2])
         out2 = sign(st2, app, sk2, pk2, msg, [pk1])
 
-        # 篡改 out2 的 R
+        # tamper out2's R
         fake_R = scalar_mult(12345, G)
         out2_tampered = (fake_R, out2[1])
 

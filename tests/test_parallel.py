@@ -1,4 +1,4 @@
-"""parallel_signing.py 的单元测试：验证并行协议的正确性和可复现性。"""
+"""Unit tests for parallel_signing.py: verify parallel protocol correctness and reproducibility."""
 
 from src.crypto.parallel_signing import run_protocol
 
@@ -7,11 +7,11 @@ TIMING_KEYS = ["keygen", "keyagg", "presign", "preagg", "sign", "signagg", "veri
 
 
 # ═══════════════════════════════════════════
-#  正确性
+#  Correctness
 # ═══════════════════════════════════════════
 
 class TestParallelCorrectness:
-    """并行协议在不同签名者数量下都能验证通过。"""
+    """Parallel protocol passes verification for different signer counts."""
 
     def test_1_signer(self):
         r = run_protocol(1, b"1-signer", seed=100)
@@ -31,16 +31,16 @@ class TestParallelCorrectness:
 
 
 # ═══════════════════════════════════════════
-#  返回结构
+#  Return structure
 # ═══════════════════════════════════════════
 
 class TestReturnStructure:
-    """返回字典包含所有预期字段。"""
+    """Return dict contains all expected fields."""
 
     def test_timing_keys(self):
         r = run_protocol(2, b"check-timing", seed=42)
         for key in TIMING_KEYS:
-            assert key in r["timing"], f"timing 缺少 {key}"
+            assert key in r["timing"], f"timing missing {key}"
 
     def test_all_timings_positive(self):
         r = run_protocol(2, b"check-positive", seed=42)
@@ -57,11 +57,11 @@ class TestReturnStructure:
 
 
 # ═══════════════════════════════════════════
-#  可复现性
+#  Reproducibility
 # ═══════════════════════════════════════════
 
 class TestReproducibility:
-    """同种子同结果。"""
+    """Same seed produces same result."""
 
     def test_same_seed_same_signature(self):
         r1 = run_protocol(3, b"reproducible", seed=777)
@@ -71,11 +71,11 @@ class TestReproducibility:
 
 
 # ═══════════════════════════════════════════
-#  安全性
+#  Security
 # ═══════════════════════════════════════════
 
 class TestParallelSecurity:
-    """并行签名结果对错误消息验证失败。"""
+    """Parallel signature fails verification for wrong message."""
 
     def test_wrong_message_fails(self):
         r = run_protocol(3, b"correct message", seed=42)
