@@ -1,4 +1,3 @@
-
 # Observing-Linear-Hashing
 
 UE Projet STL (PSTL) - MU4IN508
@@ -189,18 +188,18 @@ make run-part1 ARGS="--backend py --no-plot"
 make run-part1 ARGS="-h"
 ```
 
-| 参数 | 说明 | 默认值 |
-|------|------|--------|
-| `-u` | u 值（可多个） | 3000 |
-| `-l` | l 值（可多个） | 30 |
-| `-r` | r 值（可多个） | 2.0 2.3 2.6 2.9 3.2 3.5 4.0 |
-| `-t` | trials 数量 | 5000 |
-| `-m` | m_factor（m = m_factor × 2^l） | 1.5 |
-| `-s` | 随机种子 | 123 |
-| `-d` | 分布类型 | uniform |
-| `--backend` | 后端选择：`cpp` / `py` / `py-fixed` | cpp |
-| `--threads` | C++ 后端线程数 | 10 |
-| `--no-plot` | 禁用绘图 | — |
+| 参数          | 说明                                      | 默认值                      |
+| ------------- | ----------------------------------------- | --------------------------- |
+| `-u`        | u 值（可多个）                            | 3000                        |
+| `-l`        | l 值（可多个）                            | 30                          |
+| `-r`        | r 值（可多个）                            | 2.0 2.3 2.6 2.9 3.2 3.5 4.0 |
+| `-t`        | trials 数量                               | 5000                        |
+| `-m`        | m_factor（m = m_factor × 2^l）           | 1.5                         |
+| `-s`        | 随机种子                                  | 123                         |
+| `-d`        | 分布类型                                  | uniform                     |
+| `--backend` | 后端选择：`cpp` / `py` / `py-fixed` | cpp                         |
+| `--threads` | C++ 后端线程数                            | 10                          |
+| `--no-plot` | 禁用绘图                                  | —                          |
 
 ### 运行示例
 
@@ -250,9 +249,11 @@ M(S, h) = max_y |{x ∈ S : h(x) = y}|
 
 ---
 
-## 性能检测方法
+## 性能分析与 Profiling
 
-### CPU 监测
+### 采集方法
+
+#### CPU 火焰图（py-spy）
 
 > **注意：** 本节需要使用 **Python 3.13** 。
 
@@ -264,7 +265,7 @@ sudo py-spy record -o profiling/part1/profile.svg -- python -m src.experiments.r
 open profiling/part1/profile.svg
 ```
 
-### 内存监测
+#### 内存火焰图（memray）
 
 ```bash
 # 第一步：采集内存数据
@@ -275,4 +276,59 @@ python -m memray flamegraph profiling/part1/memray.bin -o profiling/part1/memray
 
 # 第三步：在浏览器中打开报告
 open profiling/part1/memray-flamegraph.html
+```
+
+### CPU 分析结果
+
+CPU 火焰图通过 `py-spy` 采集（Python 后端 `py-fixed` 模式，默认参数），共 6,488 个采样。
+
+![CPU 火焰图](profiling/part1/profile.svg)
+
+调用链：`runner.py:run_experiment_grid` → `estimate_prob_fixed_S` → `Maxload.max_load`，各热点函数耗时占比如下：
+
+| 函数                   | 位置                        | 采样数 | 占比            | 说明                                     |
+| ---------------------- | --------------------------- | ------ | --------------- | ---------------------------------------- |
+| `pop_min_valid`      | maxload.py:104              | 2,624  | **40.4%** | Space-Saving 惰性删除的 `heappop` 循环 |
+| `h_many`             | linear_f2.py:47             | 1,449  | **22.3%** | F₂ 线性哈希批量计算                     |
+| `process_y` 其他分支 | maxload.py:109–131         | ~1,500 | ~23%            | 字典查找、`push_state`（堆插入）       |
+| `_chunked` + 采样    | maxload.py:41 / sampling.py | ~140   | ~2%             | 输入流分块与随机向量生成                 |
+
+**关键发现：**
+
+1. **Space-Saving 堆操作是最大瓶颈**（占 63%+，含 `pop_min_valid` + `push_state`）。`pop_min_valid` 中惰性删除导致大量无效堆弹出——当候选表满时，每次替换操作需要反复 `heappop` 跳过过期条目，这在 `k=50,000` 的候选表规模下开销显著。
+2. **哈希计算只占 22%**。`h_many` 使用 C++ 后端的批量接口（`hash_many_int`），已经通过 pybind11 将计算下沉到 C++ 层。瓶颈不在哈希函数本身。
+3. **采样和分块开销可忽略**（~2%），说明输入生成不是瓶颈。
+
+**优化方向：** 这就是引入 C++ 后端 `run_trials_maxload` 的动机——将 Space-Saving 和哈希计算整体迁移到 C++ 层，消除 Python 堆操作的开销，同时利用 `std::thread` 对多次 trial 并行执行。
+
+### 内存分析结果
+
+内存分析通过 `memray` 采集，生成交互式 HTML 火焰图。
+
+- **完整内存火焰图**：[memray-flamegraph.html](profiling/part1/memray-flamegraph-memray.html)（在浏览器中打开）
+- **指定参数 (u=200, l=20)**：[mem_u200_l20.html](profiling/part1/mem_u200_l20.html)
+
+内存主要消耗在：
+
+1. **`make_S` 采样阶段**：生成 `m = m_factor × 2^l` 个随机向量并存入列表。当 `l=30, m_factor=1.5` 时，`m ≈ 1.6 × 10⁹`，列表占用内存巨大。这是 `py-fixed` 模式（固定 S）的固有代价。
+2. **Space-Saving 候选表**：`table` 字典和 `heap` 列表，规模受 `k` 参数限制（默认 50,000），内存可控。
+3. **`h_many` 返回的批量哈希结果**：每个 chunk 的临时列表（`chunk_size=16,384`），用完即释放。
+
+`py` 模式（非固定 S）使用生成器 `make_S_iter` 流式产生样本，避免了 `make_S` 的列表分配，内存占用显著更低。C++ 后端则完全在 C++ 层管理内存，Python 侧无大对象。
+
+### Python vs C++ 性能对比
+
+三种后端在相同参数下的性能差异：
+
+| 后端         | 说明           | 每次 trial 耗时 | 并行能力               |
+| ------------ | -------------- | --------------- | ---------------------- |
+| `py-fixed` | Python，固定 S | ~数百 ms        | 无                     |
+| `py`       | Python，流式 S | ~数百 ms        | 无                     |
+| `cpp`      | C++ 全链路     | ~数 ms          | `std::thread` 多线程 |
+
+C++ 后端将哈希计算（`linear_hash.cpp`）、Space-Saving（`space_saving.hpp`）、trial 循环（`trial_maxload.cpp`）全部在 C++ 层实现，并通过 `parallel_trials.hpp` 使用 `std::thread` 并行执行多个 trial。对比 Python 后端，典型加速比在 **50–100x** 量级。
+
+```bash
+# 基准对比脚本
+python scripts/compare.py
 ```
