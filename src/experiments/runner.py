@@ -320,3 +320,7 @@ if __name__ == "__main__":
             for l in l_values
         }
         plot_profile_over_l(results_by_l, r_values)
+
+    print()
+    print("提示：make run-part1 ARGS=\"-h\" 查看所有参数")
+    print("示例：make run-part1 ARGS=\"-u 3000 5000 -l 20 30 -t 10000\"")
