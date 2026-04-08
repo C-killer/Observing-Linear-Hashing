@@ -284,9 +284,115 @@ Python 的 GIL 无法防止此问题——`cypari2` 在调用 PARI 的 C 函数�
 
 ### 当前方案
 
-可并行的步骤以**顺序执行模拟**，代码结构和注释清楚标注了并行性。这忠实反映了协议设计——每个签名者独立执行，两个同步点聚合结果。
+Python 实现中，可并行的步骤以**顺序执行模拟**，代码结构和注释清楚标注了并行性。
 
-如需真正并行执行，可通过 C++ (RELIC 库) 多线程实现，或用多进程 + 手动序列化（将曲线点转为整数坐标对传输）。
+为实现真正的多线程并行，我们启动了 **C++ RELIC 并行后端**（见下方）。
+
+---
+
+## C++ 并行后端（RELIC + pybind11）
+
+### 动机
+
+PARI 线程不安全（100% segfault）、SageMath 对象无法跨进程序列化——Python 层面无解。
+方案：用 **RELIC 密码学库**（线程安全，每线程 `core_init()`）+ `std::thread` 重写椭圆曲线运算，通过 pybind11 暴露 `fastmusig` Python 模块。
+
+**详细技术设计文档：[docs/cpp_relic_parallel_design.md](docs/cpp_relic_parallel_design.md)**
+
+### 实现进度
+
+#### Phase 1：基础层 ✅
+
+椭圆曲线封装和域分离哈希函数，已通过 34 个交叉验证测试。
+
+**源码文件（`src/cpp_musig/`）：**
+
+| 文件 | 说明 |
+|------|------|
+| `CMakeLists.txt` | 构建配置：FetchContent 拉取 RELIC、pybind11（Python 3.13）、OpenSSL 3 |
+| `curve25519.hpp/.cpp` | Scalar/Point 类、G/Z 计算、Montgomery ↔ Weierstrass 坐标转换 |
+| `hash_utils.hpp/.cpp` | SHA256 域分离哈希：H_agg(tag=1)、H_non(tag=2)、H_sig(tag=3) |
+| `bindings.cpp` | pybind11 模块 `fastmusig`，导出常量和哈希函数 |
+
+**关键技术点：**
+
+- **曲线表示**：RELIC 内部使用 Short Weierstrass 形式，序列化时转回 Montgomery 坐标，确保与 Python 哈希输出字节级一致
+- **坐标转换**：`x_w = x_m + A/3 mod p`（Montgomery → Weierstrass），`x_m = x_w - A/3 mod p`（反向），y 坐标不变
+- **基点计算**：G 从 Montgomery x=9 lift，Z 通过 hash-to-curve 生成，均乘 cofactor 8（使用显式 Weierstrass 点倍加公式，避免曲线未设置时的 `ep_mul` 依赖）
+- **字节序**：hash-to-curve 用 little-endian，H_agg/H_non/H_sig 用 big-endian，点序列化用 big-endian
+
+**预计算常量（`curve25519.cpp`，均为十六进制）：**
+
+| 常量 | 值 | 含义 |
+|------|----|------|
+| `P_STR` | `2^255 - 19` | 有限域模数 p，定义 F_p |
+| `A_MONT` | `486662`（`0x76D06`） | Montgomery 曲线系数 A，即 `y² = x³ + Ax² + x` |
+| `Q_STR` | `2^252 + 2774...8493` | 素数阶子群阶 q，曲线总阶 = 8q（cofactor = 8） |
+| `A_DIV_3` | `A × 3⁻¹ mod p` | 坐标转换常量，486662/3 在整数上不整除，但模 p 下 3 有逆元 |
+| `A_W` | `(3 - A²)/3 mod p` | Weierstrass 系数 a_w，由 Montgomery A 推导 |
+| `B_W` | `(2A³ - 9A)/27 mod p` | Weierstrass 系数 b_w，使 RELIC 能原生运算 Curve25519 |
+
+**交叉验证结果：**
+
+| 验证项 | 结果 |
+|--------|------|
+| G 坐标（Montgomery 64 bytes） | C++ == Python ✅ |
+| Z 坐标（Montgomery 64 bytes） | C++ == Python ✅ |
+| q 值（big-endian 32 bytes） | C++ == Python ✅ |
+| H_agg 输出（固定输入） | C++ == Python ✅ |
+| H_non 输出（固定输入） | C++ == Python ✅ |
+| H_sig 输出（固定输入） | C++ == Python ✅ |
+| pk list 排序序列化 | C++ == Python ✅ |
+
+#### Phase 2：算法层（待实现）
+
+8 个 MuSig2-H 算法 + Signer 状态机 + 交叉签名验证。
+
+#### Phase 3：并行层（待实现）
+
+RelicThreadPool + `run_protocol_parallel` + 性能基准。
+
+#### Phase 4：集成（待实现）
+
+完整 Makefile 目标 + 文档更新。
+
+### 构建与测试
+
+```bash
+# 依赖
+# - CMake >= 3.16
+# - C++17 编译器
+# - OpenSSL 3（brew install openssl@3）
+# - pybind11（pip install pybind11）
+# - RELIC（CMake FetchContent 自动拉取，无需手动安装）
+# - Python 3.13（.venv313）
+
+# 构建 C++ 后端
+make build-musig
+
+# 运行交叉验证测试（34 tests，需要 SageMath）
+make test-part2-cpp
+
+# 手动构建（等价于 make build-musig）
+cmake -S src/cpp_musig -B src/cpp_musig/build -DCMAKE_BUILD_TYPE=Release
+cmake --build src/cpp_musig/build -j
+```
+
+构建产物：`fastmusig.cpython-313-darwin.so`（项目根目录）
+
+### 当前导出的 Python API
+
+```python
+import fastmusig
+
+fastmusig.init()                          # 初始化曲线参数
+fastmusig.get_G_bytes() -> bytes          # G 点，Montgomery x||y，64 bytes
+fastmusig.get_Z_bytes() -> bytes          # Z 点，Montgomery x||y，64 bytes
+fastmusig.get_q_bytes() -> bytes          # 子群阶 q，big-endian，32 bytes
+fastmusig.H_agg_bytes(L, pk) -> bytes     # H_agg 哈希，32 bytes
+fastmusig.H_sig_bytes(apk, R, m) -> bytes # H_sig 哈希，32 bytes
+fastmusig.H_non_bytes(apk, nonces, m) -> bytes  # H_non 哈希，32 bytes
+```
 
 ---
 
@@ -373,8 +479,10 @@ S(n) = 1 / ((1 − f) + f / n)
 
 ```bash
 # 通过 Makefile（推荐）
-make test-part2     # 一次性运行全部 Part 2 测试（82 个）
-make run-part2      # 运行 Part 2 实验（支持 ARGS，如 make run-part2 ARGS="-n 5"）
+make test-part2       # Python 全部测试（82 个，需要 SageMath）
+make test-part2-cpp   # C++ 交叉验证测试（34 个，自动编译，需要 SageMath）
+make test-all         # 全部测试（Part 1 + Part 2 Python + Part 2 C++）
+make run-part2        # 运行 Part 2 实验（支持 ARGS，如 make run-part2 ARGS="-n 5"）
 
 # 逐模块运行
 sage -python -m pytest tests/test_curve.py -v
@@ -382,11 +490,12 @@ sage -python -m pytest tests/test_lhf.py -v
 sage -python -m pytest tests/test_musig2h.py -v
 sage -python -m pytest tests/test_signer.py -v
 sage -python -m pytest tests/test_parallel.py -v
+sage -python -m pytest tests/test_musig2h_cpp.py -v   # C++ 交叉验证
 ```
 
 ## 文件总览
 
-### 源码
+### Python 源码
 
 | 文件                               | 行数 | 职责                                              |
 | ---------------------------------- | ---- | ------------------------------------------------- |
@@ -396,22 +505,33 @@ sage -python -m pytest tests/test_parallel.py -v
 | `src/crypto/signer.py`           | 88   | Signer 类：状态管理、协议顺序检查、nonce 销毁     |
 | `src/crypto/parallel_signing.py` | 124  | 协议协调器：7 步流程编排 + 计时                   |
 
+### C++ 源码（`src/cpp_musig/`）
+
+| 文件 | 职责 |
+|------|------|
+| `CMakeLists.txt` | CMake 构建：RELIC FetchContent + pybind11 + OpenSSL |
+| `curve25519.hpp/.cpp` | Scalar/Point 类、Curve25519 Weierstrass 封装、G/Z 计算、坐标转换 |
+| `hash_utils.hpp/.cpp` | SHA256 域分离哈希：H_agg、H_non、H_sig + 序列化工具 |
+| `bindings.cpp` | pybind11 模块 `fastmusig` 接口定义 |
+
 ### 测试
 
-| 文件                       | 测试数 | 覆盖内容                                 |
-| -------------------------- | ------ | ---------------------------------------- |
-| `tests/test_curve.py`    | 21     | 素数域、曲线阶、子群、算术性质、随机标量 |
-| `tests/test_lhf.py`      | 15     | 线性性、满同态、非单射、接口兼容         |
-| `tests/test_musig2h.py`  | 18     | 8 算法单元测试 + 1/2/3/5 人协议 + 安全性 |
-| `tests/test_signer.py`   | 14     | Signer 生命周期、nonce 安全、跳步报错    |
-| `tests/test_parallel.py` | 9      | 协调器正确性、返回结构、可复现、安全性   |
+| 文件                           | 测试数 | 覆盖内容                                       |
+| ------------------------------ | ------ | ---------------------------------------------- |
+| `tests/test_curve.py`        | 21     | 素数域、曲线阶、子群、算术性质、随机标量        |
+| `tests/test_lhf.py`          | 15     | 线性性、满同态、非单射、接口兼容                |
+| `tests/test_musig2h.py`      | 18     | 8 算法单元测试 + 1/2/3/5 人协议 + 安全性        |
+| `tests/test_signer.py`       | 14     | Signer 生命周期、nonce 安全、跳步报错           |
+| `tests/test_parallel.py`     | 9      | 协调器正确性、返回结构、可复现、安全性          |
+| `tests/test_musig2h_cpp.py`  | 34     | C++ ↔ Python 交叉验证：G/Z/q 一致性、哈希一致性 |
 
 ### 文档
 
-| 文件                           | 说明                              |
-| ------------------------------ | --------------------------------- |
-| `README_CN_SECTION2.md`      | 本文件，Part 2 实现指南           |
-| `docs/part2_background.md`   | 研究动机、Part 1 到 Part 2 的桥梁 |
-| `docs/pari_thread_safety.md` | PARI 线程安全问题的完整分析       |
+| 文件                                  | 说明                                    |
+| ------------------------------------- | --------------------------------------- |
+| `README_CN_SECTION2.md`             | 本文件，Part 2 实现指南                 |
+| `docs/part2_background.md`          | 研究动机、Part 1 到 Part 2 的桥梁       |
+| `docs/pari_thread_safety.md`        | PARI 线程安全问题的完整分析             |
+| `docs/cpp_relic_parallel_design.md`  | C++ RELIC 并行 MuSig2-H 技术设计文档    |
 
 [^amdahl]: G. M. Amdahl, "Validity of the Single Processor Approach to Achieving Large Scale Computing Capabilities", *AFIPS Conference Proceedings*, 1967, pp. 483–485.

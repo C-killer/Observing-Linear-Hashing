@@ -1,7 +1,8 @@
 # Python 3.13 virtual environment (target version for C++ pybind11 module)
 VENV := .venv313/bin/python
 
-.PHONY: test-part1 test-part2 test-all build-cpp run-part1 run-part2 clean help \
+.PHONY: test-part1 test-part2 test-part2-cpp test-all build-cpp build-musig \
+       run-part1 run-part2 clean help \
        benchmark-part1 profile-part2 profile-part2-fast profile-part2-cpu
 
 help:  ## Show help information
@@ -27,6 +28,13 @@ test-part2:  ## Run Part 2 tests (requires SageMath)
 	sage -python -m pytest tests/test_curve.py tests/test_lhf.py \
 		tests/test_musig2h.py tests/test_signer.py tests/test_parallel.py -v
 
+build-musig:  ## Build C++ MuSig2-H backend (RELIC + pybind11)
+	cmake -S src/cpp_musig -B src/cpp_musig/build -DCMAKE_BUILD_TYPE=Release
+	cmake --build src/cpp_musig/build -j
+
+test-part2-cpp: build-musig  ## Run C++ cross-validation tests (requires SageMath)
+	sage -python -m pytest tests/test_musig2h_cpp.py -v
+
 run-part2:  ## Run Part 2 experiment (supports ARGS, e.g. make run-part2 ARGS="-n 5 -m 'test'")
 	sage -python -m src.crypto.parallel_signing $(ARGS)
 
@@ -42,9 +50,9 @@ profile-part2-cpu:  ## Part 2 CPU profiling (cProfile + call graph)
 	@echo "[Done] Call graph: profiling/part2/profile_musig2h.png"
 
 # === All ===
-test-all: test-part1 test-part2  ## Run all tests
+test-all: test-part1 test-part2 test-part2-cpp  ## Run all tests
 
 clean:  ## Clean build artifacts
-	rm -rf src/cpp/build
+	rm -rf src/cpp/build src/cpp_musig/build
 	find . -type d -name __pycache__ -exec rm -rf {} +
 	find . -type d -name .pytest_cache -exec rm -rf {} +

@@ -18,6 +18,7 @@ venv/
 cpp/build/
 # C++ build artifacts
 src/cpp/build/
+src/cpp_musig/build
 
 CLAUDE.md
 .codex/
