@@ -126,16 +126,8 @@ Cela correspond aux exigences du cours — le terme « processus parallèles » 
 
 ### 6.2 Pour une exécution véritablement parallèle
 
-| Solution | Faisabilité | Description |
-|----------|-------------|-------------|
-| C++ multithreadé + bibliothèque RELIC | Recommandé | RELIC est une bibliothèque de courbes elliptiques thread-safe, extensible depuis le framework C++ multithread de la Part 1 |
+| Solution                                 | Faisabilité           | Description                                                                                                                 |
+| ---------------------------------------- | ---------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| C++ multithreadé + bibliothèque RELIC  | Recommandé            | RELIC est une bibliothèque de courbes elliptiques thread-safe, extensible depuis le framework C++ multithread de la Part 1 |
 | Multiprocessus + sérialisation manuelle | Faisable mais complexe | Convertir les points de courbe en paires d'entiers (x, y) pour le transfert, reconstruire les objets Sage côté réception |
-| Monothread + asyncio | Sans intérêt | Les opérations sur courbes elliptiques sont CPU-intensives, l'I/O asynchrone ne peut pas les accélérer |
-
----
-
-## 7. Références
-
-- [Documentation officielle PARI/GP : notes sur la sécurité des threads](https://pari.math.u-bordeaux.fr/dochtml/html-stable/GP_reference.html) — `libpari` n'est pas thread-safe par défaut, il faut activer `--enable-tls` à la compilation et utiliser l'API `pari_thread_*`
-- [Code source cypari2](https://github.com/sagemath/cypari2) — `sig_on()`/`sig_off()` encapsulent les appels PARI et libèrent le GIL
-- [SageMath Trac #25094](https://trac.sagemath.org/ticket/25094) — Discussion sur les problèmes connus de sécurité multithreadée de SageMath
+| Monothread + asyncio                     | Sans intérêt         | Les opérations sur courbes elliptiques sont CPU-intensives, l'I/O asynchrone ne peut pas les accélérer                   |
