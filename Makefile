@@ -2,7 +2,7 @@
 VENV := .venv313/bin/python
 
 .PHONY: test-part1 test-part2 test-all build-cpp run-part1 run-part2 clean help \
-       profile-part2 profile-part2-fast profile-part2-cpu
+       benchmark-part1 profile-part2 profile-part2-fast profile-part2-cpu
 
 help:  ## Show help information
 	@grep -E '^[a-zA-Z0-9_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
@@ -18,6 +18,9 @@ build-cpp:  ## Build C++ backend (pybind11, Python 3.13)
 
 run-part1:  ## Run Part 1 experiment (supports ARGS)
 	$(VENV) -m src.experiments.runner $(ARGS)
+
+benchmark-part1: build-cpp  ## Part 1 benchmark: Python vs C++ performance
+	$(VENV) scripts/compare.py $(ARGS)
 
 # === Part 2 ===
 test-part2:  ## Run Part 2 tests (requires SageMath)

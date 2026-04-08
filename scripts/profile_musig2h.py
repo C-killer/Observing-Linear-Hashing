@@ -297,7 +297,7 @@ def main():
 
     print()
     print("╔══════════════════════════════════════════════════════════════╗")
-    print("║     MuSig2-H Profiling & PARI Thread Safety Analysis       ║")
+    print("║     MuSig2-H Profiling & PARI Thread Safety Analysis         ║")
     print("╚══════════════════════════════════════════════════════════════╝")
     print()
 
@@ -308,7 +308,7 @@ def main():
         print("[SKIP] Thread crash experiment (--skip-crash)\n")
 
     # Experiment B
-    n_list = [1, 2, 3, 5, 8, 10, 15, 20]
+    n_list = [1, 2, 5, 10, 20, 50, 100, 150]
     all_data = bench_scalability(n_list, warmup=args.warmup, repeats=args.repeats)
 
     # Experiment C

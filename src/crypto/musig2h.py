@@ -62,9 +62,10 @@ def _serialize_pk_list(L):
     return b"".join(_point_to_bytes(pk) for pk in sorted_L)
 
 
-def H_agg(L, pk):
+def H_agg(L, pk, _L_bytes=None):
     """H_agg(L, pk_i) → Z_q, used in KeyAgg."""
-    return _hash(1, _serialize_pk_list(L), _point_to_bytes(pk))
+    L_bytes = _L_bytes if _L_bytes is not None else _serialize_pk_list(L)
+    return _hash(1, L_bytes, _point_to_bytes(pk))
 
 
 def H_non(apk, nonce_points, m):
@@ -113,11 +114,24 @@ def key_agg(L):
     L: list of public keys (curve points)
     apk = Σ H_agg(L, pk_i) · pk_i
     """
-    apk = O
-    for pk_i in L:
-        a_i = H_agg(L, pk_i)
-        apk = point_add(apk, scalar_mult(a_i, pk_i))
+    apk, _ = key_agg_ex(L)
     return apk
+
+
+def key_agg_ex(L):
+    """
+    KeyAgg(L) → (apk, coeffs)
+    Extended version: also returns per-signer aggregation coefficients.
+    coeffs: dict mapping pk → a_i (Z_q scalar)
+    """
+    L_bytes = _serialize_pk_list(L)
+    apk = O
+    coeffs = {}
+    for pk_i in L:
+        a_i = H_agg(L, pk_i, _L_bytes=L_bytes)
+        coeffs[pk_i] = a_i
+        apk = point_add(apk, scalar_mult(a_i, pk_i))
+    return apk, coeffs
 
 
 def presign(rng=None):
@@ -149,9 +163,9 @@ def preagg(pp_list):
     return tuple(app)
 
 
-def sign(st, app, sk, pk, m, L):
+def sign(st, app, sk, pk, m, L, apk=None, a=None):
     """
-    Sign(st, app, sk, pk, m, L) → out = (R, s)
+    Sign(st, app, sk, pk, m, L, [apk, a]) → out = (R, s)
 
     st:  secret nonce pairs (r_1, ..., r_4), each r_j = (r_j0, r_j1) ∈ Z_q²
     app: aggregated nonces (R_1, ..., R_4), curve points
@@ -159,15 +173,19 @@ def sign(st, app, sk, pk, m, L):
     pk:  signing public key (curve point)
     m:   message (bytes)
     L:   list of other signers' public keys (excluding own pk)
+    apk: (optional) precomputed aggregated public key, skips KeyAgg recomputation
+    a:   (optional) precomputed H_agg(L∪{pk}, pk), skips H_agg recomputation
     """
     # L ← L ∪ {pk}
     L_full = list(L) + [pk]
 
-    # apk ← KeyAgg(L)
-    apk = key_agg(L_full)
+    # apk ← KeyAgg(L)  [use precomputed if available]
+    if apk is None:
+        apk = key_agg(L_full)
 
-    # a ← H_agg(L, pk)
-    a = H_agg(L_full, pk)
+    # a ← H_agg(L, pk)  [use precomputed if available]
+    if a is None:
+        a = H_agg(L_full, pk)
 
     # (R_1, ..., R_4) ← app
     # b ← H_non(apk, (R_1,...,R_4), m)
