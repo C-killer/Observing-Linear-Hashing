@@ -32,6 +32,8 @@ class Signer:
         self._pp = None      # own nonce commitments (public)
         self._st = None      # own nonce secrets (private)
         self._app = None     # aggregated nonce commitments
+        self._apk = None     # precomputed aggregated public key
+        self._a = None       # precomputed own aggregation coefficient
 
     def set_peers(self, peer_pks):
         """
@@ -40,6 +42,16 @@ class Signer:
         peer_pks: list of curve points
         """
         self._peers = list(peer_pks)
+
+    def set_agg_key(self, apk, a):
+        """
+        Cache precomputed aggregated public key and own aggregation coefficient.
+
+        apk: aggregated public key (curve point)
+        a:   H_agg(L, pk) for this signer (Z_q scalar)
+        """
+        self._apk = apk
+        self._a = a
 
     def presign(self):
         """
@@ -77,7 +89,8 @@ class Signer:
         if self._app is None:
             raise RuntimeError("must call receive_agg_nonce() first")
 
-        out = sign(self._st, self._app, self.sk, self.pk, message, self._peers)
+        out = sign(self._st, self._app, self.sk, self.pk, message, self._peers,
+                   apk=self._apk, a=self._a)
 
         # destroy nonce after use, prevent reuse which could leak secret key
         self._st = None

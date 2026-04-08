@@ -14,7 +14,7 @@ For true parallelism, use C++ (RELIC) multithreading or multiprocessing + serial
 import time
 
 from src.crypto.signer import Signer
-from src.crypto.musig2h import key_agg, preagg, sign_agg, ver
+from src.crypto.musig2h import key_agg_ex, preagg, sign_agg, ver
 
 
 def run_protocol(n_signers, message, seed=42):
@@ -51,9 +51,10 @@ def run_protocol(n_signers, message, seed=42):
     # 2. KeyAgg ← sequential: aggregate after collecting all public keys
     t0 = time.perf_counter()
     all_pks = [s.pk for s in signers]
-    apk = key_agg(all_pks)
+    apk, coeffs = key_agg_ex(all_pks)
     for s in signers:
         s.set_peers([pk for pk in all_pks if pk != s.pk])
+        s.set_agg_key(apk, coeffs[s.pk])
     timing["keyagg"] = time.perf_counter() - t0
 
     # 3. PreSign × n ← parallelizable: each signer generates nonces independently
