@@ -20,3 +20,5 @@ cpp/build/
 src/cpp/build/
 
 CLAUDE.md
+.codex/
+log.txt
