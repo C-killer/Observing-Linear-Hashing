@@ -605,8 +605,43 @@ void curve_init() {
     g_initialized = true;
 }
 
+/// Set up RELIC thread-local curve parameters (prime field + Weierstrass curve).
+/// Must be called after core_init() on any thread that does RELIC operations.
+static void setup_curve_params_for_thread() {
+    // Set prime field (thread-local in RELIC)
+    bn_t p_bn;
+    bn_null(p_bn);
+    bn_new(p_bn);
+    bn_from_hex(p_bn, P_STR);
+    fp_prime_set_dense(p_bn);
+    bn_free(p_bn);
+
+    // Set curve equation and generator (thread-local in RELIC)
+    fp_t a_w, b_w;
+    fp_from_hex(a_w, A_W_STR);
+    fp_from_hex(b_w, B_W_STR);
+
+    // Reconstruct generator from global G (already computed by curve_init)
+    ep_t gen;
+    ep_null(gen);
+    ep_new(gen);
+    fp_copy(gen->x, g_G.p_->x);
+    fp_copy(gen->y, g_G.p_->y);
+    fp_set_dig(gen->z, 1);
+    gen->coord = BASIC;
+
+    bn_t cofactor;
+    bn_null(cofactor);
+    bn_new(cofactor);
+    bn_set_dig(cofactor, 8);
+    ep_curve_set_plain(a_w, b_w, gen, g_q, cofactor, 0);
+    bn_free(cofactor);
+    ep_free(gen);
+}
+
 void curve_init_thread() {
     core_init();
+    setup_curve_params_for_thread();
 }
 
 void curve_clean_thread() {
