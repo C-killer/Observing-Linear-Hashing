@@ -5,6 +5,7 @@ Phase 1: curve25519 (G, Z, q, Scalar, Point, coordinate conversion)
          hash_utils (H_agg, H_non, H_sig, serialization)
 Phase 2: musig2h algorithms (keygen, key_agg, ver, sign, full protocol)
          cross-signing (C++ sign → Python ver, Python sign → C++ ver)
+Phase 3: parallel protocol (RelicThreadPool + run_protocol_parallel)
 """
 
 import pytest
@@ -549,3 +550,139 @@ class TestCppSignPythonVer:
         result = fastmusig.run_protocol_sequential(10, b"ten signers", seed=300)
         apk, sigma = self._cpp_sigma_to_python(result)
         assert ver(apk, b"ten signers", sigma)
+
+
+# ═══════════════════════════════════════════
+#  Phase 3: Parallel protocol (RelicThreadPool)
+# ═══════════════════════════════════════════
+
+TIMING_KEYS = {"keygen", "keyagg", "presign", "preagg", "sign", "signagg", "verify", "total"}
+
+
+class TestParallelProtocol:
+    """C++ run_protocol_parallel: correctness across signer counts."""
+
+    def test_1_signer(self):
+        result = fastmusig.run_protocol_parallel(1, b"solo", seed=42)
+        assert result["verified"] is True
+
+    def test_2_signers(self):
+        result = fastmusig.run_protocol_parallel(2, b"duo", seed=42)
+        assert result["verified"] is True
+
+    def test_3_signers(self):
+        result = fastmusig.run_protocol_parallel(3, b"trio", seed=42)
+        assert result["verified"] is True
+
+    def test_5_signers(self):
+        result = fastmusig.run_protocol_parallel(5, b"five", seed=42)
+        assert result["verified"] is True
+
+    def test_10_signers(self):
+        result = fastmusig.run_protocol_parallel(10, b"ten", seed=42)
+        assert result["verified"] is True
+
+    def test_50_signers(self):
+        result = fastmusig.run_protocol_parallel(50, b"fifty", seed=42)
+        assert result["verified"] is True
+
+
+class TestParallelDeterminism:
+    """Parallel protocol determinism and consistency with sequential."""
+
+    def test_same_seed_same_result(self):
+        """Same seed must produce identical signatures."""
+        r1 = fastmusig.run_protocol_parallel(3, b"det", seed=777)
+        r2 = fastmusig.run_protocol_parallel(3, b"det", seed=777)
+        assert r1["apk"] == r2["apk"]
+        assert r1["R"] == r2["R"]
+        assert r1["s0"] == r2["s0"]
+        assert r1["s1"] == r2["s1"]
+
+    def test_different_seeds_different_signatures(self):
+        """Different seeds must produce different signatures."""
+        r1 = fastmusig.run_protocol_parallel(3, b"test", seed=42)
+        r2 = fastmusig.run_protocol_parallel(3, b"test", seed=99)
+        assert r1["R"] != r2["R"] or r1["s0"] != r2["s0"]
+
+    def test_parallel_matches_sequential(self):
+        """Same seed → parallel and sequential produce identical signature."""
+        seq = fastmusig.run_protocol_sequential(3, b"match", seed=42)
+        par = fastmusig.run_protocol_parallel(3, b"match", seed=42)
+        assert seq["apk"] == par["apk"]
+        assert seq["R"] == par["R"]
+        assert seq["s0"] == par["s0"]
+        assert seq["s1"] == par["s1"]
+
+
+class TestParallelCrossValidation:
+    """C++ parallel signatures verified by Python ver."""
+
+    def _cpp_result_to_python(self, result):
+        """Convert C++ parallel result dict to Python (apk, sigma)."""
+        from src.crypto.curve import E, Fp
+        ax = Integer(int.from_bytes(result["apk"][:32], "big"))
+        ay = Integer(int.from_bytes(result["apk"][32:], "big"))
+        apk = E(Fp(ax), Fp(ay))
+        rx = Integer(int.from_bytes(result["R"][:32], "big"))
+        ry = Integer(int.from_bytes(result["R"][32:], "big"))
+        R = E(Fp(rx), Fp(ry))
+        s0 = int.from_bytes(result["s0"], "big")
+        s1 = int.from_bytes(result["s1"], "big")
+        return apk, (R, (s0, s1))
+
+    def test_parallel_sign_python_ver_3(self):
+        result = fastmusig.run_protocol_parallel(3, b"cross3", seed=42)
+        apk, sigma = self._cpp_result_to_python(result)
+        assert ver(apk, b"cross3", sigma)
+
+    def test_parallel_sign_python_ver_5(self):
+        result = fastmusig.run_protocol_parallel(5, b"cross5", seed=200)
+        apk, sigma = self._cpp_result_to_python(result)
+        assert ver(apk, b"cross5", sigma)
+
+    def test_parallel_sign_python_ver_10(self):
+        result = fastmusig.run_protocol_parallel(10, b"cross10", seed=300)
+        apk, sigma = self._cpp_result_to_python(result)
+        assert ver(apk, b"cross10", sigma)
+
+
+class TestParallelEdgeCases:
+    """Thread count variations and edge cases."""
+
+    def test_single_thread(self):
+        result = fastmusig.run_protocol_parallel(5, b"1thread", seed=42, num_threads=1)
+        assert result["verified"] is True
+
+    def test_more_threads_than_signers(self):
+        """num_threads > n_signers: should cap to n_signers."""
+        result = fastmusig.run_protocol_parallel(2, b"excess", seed=42, num_threads=16)
+        assert result["verified"] is True
+        assert result["num_threads"] == 2
+
+    def test_empty_message(self):
+        result = fastmusig.run_protocol_parallel(3, b"", seed=42)
+        assert result["verified"] is True
+
+    def test_long_message(self):
+        result = fastmusig.run_protocol_parallel(3, b"A" * 10000, seed=42)
+        assert result["verified"] is True
+
+    def test_timing_keys(self):
+        """Timing dict must contain all 8 phase keys."""
+        result = fastmusig.run_protocol_parallel(3, b"timing", seed=42)
+        assert set(result["timing"].keys()) == TIMING_KEYS
+        for key in TIMING_KEYS:
+            assert result["timing"][key] >= 0
+
+    def test_result_fields(self):
+        """Result dict has all expected fields with correct sizes."""
+        result = fastmusig.run_protocol_parallel(3, b"fields", seed=42)
+        assert "apk" in result and len(result["apk"]) == 64
+        assert "R" in result and len(result["R"]) == 64
+        assert "s0" in result and len(result["s0"]) == 32
+        assert "s1" in result and len(result["s1"]) == 32
+        assert result["verified"] is True
+        assert result["n_signers"] == 3
+        assert "num_threads" in result
+        assert "timing" in result

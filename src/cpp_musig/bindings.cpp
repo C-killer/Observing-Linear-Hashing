@@ -11,6 +11,7 @@
 #include "curve25519.hpp"
 #include "hash_utils.hpp"
 #include "musig2h.hpp"
+#include "parallel_protocol.hpp"
 #include "signer.hpp"
 
 namespace py = pybind11;
@@ -240,4 +241,40 @@ PYBIND11_MODULE(fastmusig, m) {
         return result;
     }, py::arg("n_signers"), py::arg("message"), py::arg("seed") = 42,
     "Run complete MuSig2-H protocol sequentially, return dict with signature and verification");
+
+    // ══════════════════════════════════════
+    //  Phase 3: Parallel protocol runner
+    // ══════════════════════════════════════
+
+    m.def("run_protocol_parallel", [](int n_signers, py::bytes msg,
+                                       uint64_t seed, int num_threads) {
+        curve_init();
+        auto m_str = msg.cast<std::string>();
+        std::vector<uint8_t> message(m_str.begin(), m_str.end());
+
+        ProtocolResult result;
+        {
+            py::gil_scoped_release release;
+            result = run_protocol_parallel(n_signers, message, seed, num_threads);
+        }
+
+        py::dict out;
+        out["apk"] = point_to_pybytes(result.apk);
+        out["R"] = point_to_pybytes(result.sigma.R);
+        out["s0"] = scalar_to_pybytes(result.sigma.s0);
+        out["s1"] = scalar_to_pybytes(result.sigma.s1);
+        out["verified"] = result.verified;
+        out["n_signers"] = result.n_signers;
+        out["num_threads"] = result.num_threads;
+
+        py::dict timing;
+        for (const auto& [k, v] : result.timing) {
+            timing[py::cast(k)] = v;
+        }
+        out["timing"] = timing;
+
+        return out;
+    }, py::arg("n_signers"), py::arg("message"),
+       py::arg("seed") = 42, py::arg("num_threads") = 0,
+       "Run MuSig2-H with parallel KeyGen/PreSign/Sign (RelicThreadPool)");
 }

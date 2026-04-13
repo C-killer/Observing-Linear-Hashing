@@ -344,17 +344,82 @@ PARI 线程不安全（100% segfault）、SageMath 对象无法跨进程序列�
 | H_sig 输出（固定输入） | C++ == Python ✅ |
 | pk list 排序序列化 | C++ == Python ✅ |
 
-#### Phase 2：算法层（待实现）
+#### Phase 2：算法层 ✅
 
-8 个 MuSig2-H 算法 + Signer 状态机 + 交叉签名验证。
+8 个 MuSig2-H 算法 + Signer 状态机 + 交叉签名验证，已通过 24 个新增测试（共 58 个）。
 
-#### Phase 3：并行层（待实现）
+**新增源码文件（`src/cpp_musig/`）：**
 
-RelicThreadPool + `run_protocol_parallel` + 性能基准。
+| 文件 | 说明 |
+|------|------|
+| `musig2h.hpp/.cpp` | 8 个无状态算法：keygen、key_agg、key_agg_ex、presign、preagg、sign、sign_agg、ver |
+| `signer.hpp/.cpp` | Signer 状态机：生命周期管理、nonce 签名后自动销毁、`std::optional` 状态控制 |
+
+**关键设计点：**
+
+- **全局缓存优化**：`key_agg_ex` 一次性计算 `apk` 和所有签名者的聚合系数 `coeffs`，通过 `set_agg_key(apk, a)` 分发缓存到每个 Signer，`sign()` 时跳过重复的 `key_agg` 和 `H_agg` 计算（与 Python 版 `parallel_signing.py` 策略一致）
+- **sign() 可选缓存参数**：接受 `cached_apk`/`cached_a` 指针，有缓存直接使用，无缓存回退到重算
+- **Signer 状态机**：每个 Signer 持有独立 RNG（`uint64_t` seed），为 Phase 3 线程安全做准备
+- **run_protocol_sequential**：C++ 内完整 7 步协议（与 Python `parallel_signing.py` 流程一致），作为 Phase 3 并行化基线
+
+**交叉验证结果（24 个新增测试）：**
+
+| 验证项 | 结果 |
+|--------|------|
+| KeyAgg apk 一致性（2 点 / 单点 / 顺序无关） | C++ == Python ✅ |
+| key_agg_ex 系数一致性（3 个生成密钥） | C++ == Python ✅ |
+| Python 签名 → C++ ver（2/3/5 签名者） | 验证通过 ✅ |
+| C++ ver 拒绝篡改（wrong msg / s0 / s1） | 正确拒绝 ✅ |
+| C++ run_protocol_sequential 自验（1/2/3/5/10 签名者） | 验证通过 ✅ |
+| C++ 签名 → Python ver（2/3/5/10 签名者） | 验证通过 ✅ |
+
+#### Phase 3：并行层 ✅
+
+RelicThreadPool 线程池 + `run_protocol_parallel` 并行协议，已通过 18 个新增测试（共 76 个）。
+
+**新增源码文件（`src/cpp_musig/`）：**
+
+| 文件 | 说明 |
+|------|------|
+| `parallel_protocol.hpp/.cpp` | RelicThreadPool 线程池 + `run_protocol_parallel` 7步并行协议 |
+
+**RelicThreadPool 设计（设计文档 Section 9）：**
+
+```
+pool = RelicThreadPool(n_threads)    ← 线程启动，各调 core_init() + 曲线参数设置（1次）
+  ├── Phase 1: pool.run_phase(n, KeyGen)    → barrier
+  ├── Phase 3: pool.run_phase(n, PreSign)   → barrier
+  └── Phase 5: pool.run_phase(n, Sign)      → barrier
+~pool()                                      ← 线程退出，各调 core_clean()（1次）
+```
+
+- **线程池常驻**：3 个并行阶段复用同一批 worker 线程，只需 1×N 次 `core_init()/core_clean()`（而非 spawn-per-phase 的 3×N 次）
+- **任务分发**：`std::atomic<size_t>` 原子计数器，worker 通过 `fetch_add` 抢占任务索引
+- **阶段同步**：`phase_id_` 递增 + `condition_variable` 通知启动，`workers_done_` 原子计数到达阈值后通知完成
+- **GIL 释放**：pybind11 绑定中 `py::gil_scoped_release`，C++ 并行执行期间不持有 Python GIL
+- **线程数上限**：`min(num_threads, n_signers)`，避免空闲线程浪费
+
+**RELIC 线程安全修复：**
+
+`curve_init_thread()` 不仅调用 `core_init()`，还调用 `setup_curve_params_for_thread()` 设置线程局部的素域参数（`fp_prime_set_dense`）和曲线方程（`ep_curve_set_plain`），因为 RELIC 的曲线参数是 thread-local 的。
+
+**交叉验证结果（18 个新增测试）：**
+
+| 验证项 | 结果 |
+|--------|------|
+| 并行协议自验（1/2/3/5/10/50 签名者） | 验证通过 ✅ |
+| 确定性：同 seed 两次并行结果一致 | 一致 ✅ |
+| 不同 seed 产生不同签名 | 不同 ✅ |
+| **并行 == 顺序**（同 seed → 相同 R/s0/s1/apk） | 完全一致 ✅ |
+| C++ 并行签名 → Python ver（3/5/10 签名者） | 验证通过 ✅ |
+| 线程边界（num_threads=1 / threads>signers） | 正确处理 ✅ |
+| 空消息 / 10KB 消息 | 验证通过 ✅ |
+| timing dict 包含 8 个阶段 key | 结构正确 ✅ |
+| result 字段和字节长度 | 格式正确 ✅ |
 
 #### Phase 4：集成（待实现）
 
-完整 Makefile 目标 + 文档更新。
+bench-part2 基准测试 + 文档更新。
 
 ### 构建与测试
 
@@ -370,7 +435,7 @@ RelicThreadPool + `run_protocol_parallel` + 性能基准。
 # 构建 C++ 后端
 make build-musig
 
-# 运行交叉验证测试（34 tests，需要 SageMath）
+# 运行交叉验证测试（76 tests，需要 SageMath）
 make test-part2-cpp
 
 # 手动构建（等价于 make build-musig）
@@ -385,6 +450,7 @@ cmake --build src/cpp_musig/build -j
 ```python
 import fastmusig
 
+# Phase 1: 常量与哈希
 fastmusig.init()                          # 初始化曲线参数
 fastmusig.get_G_bytes() -> bytes          # G 点，Montgomery x||y，64 bytes
 fastmusig.get_Z_bytes() -> bytes          # Z 点，Montgomery x||y，64 bytes
@@ -392,6 +458,19 @@ fastmusig.get_q_bytes() -> bytes          # 子群阶 q，big-endian，32 bytes
 fastmusig.H_agg_bytes(L, pk) -> bytes     # H_agg 哈希，32 bytes
 fastmusig.H_sig_bytes(apk, R, m) -> bytes # H_sig 哈希，32 bytes
 fastmusig.H_non_bytes(apk, nonces, m) -> bytes  # H_non 哈希，32 bytes
+
+# Phase 2: 算法与协议
+fastmusig.keygen(seed) -> (sk_bytes, pk_bytes)              # KeyGen
+fastmusig.key_agg(pk_list_bytes) -> apk_bytes               # KeyAgg
+fastmusig.key_agg_ex(pk_list_bytes) -> (apk_bytes, [coeff_bytes...])  # KeyAgg + 系数
+fastmusig.ver(apk_bytes, msg, R_bytes, s0_bytes, s1_bytes) -> bool    # 签名验证
+fastmusig.run_protocol_sequential(n_signers, msg, seed=42) -> dict    # 完整顺序协议
+
+# Phase 3: 并行协议
+fastmusig.run_protocol_parallel(n_signers, msg, seed=42, num_threads=0) -> dict
+# num_threads=0 自动使用 hardware_concurrency
+# 返回 dict 包含: apk, R, s0, s1, verified, n_signers, num_threads, timing
+# timing: {keygen, keyagg, presign, preagg, sign, signagg, verify, total}（秒）
 ```
 
 ---
@@ -480,7 +559,7 @@ S(n) = 1 / ((1 − f) + f / n)
 ```bash
 # 通过 Makefile（推荐）
 make test-part2       # Python 全部测试（82 个，需要 SageMath）
-make test-part2-cpp   # C++ 交叉验证测试（34 个，自动编译，需要 SageMath）
+make test-part2-cpp   # C++ 交叉验证测试（76 个，自动编译，需要 SageMath）
 make test-all         # 全部测试（Part 1 + Part 2 Python + Part 2 C++）
 make run-part2        # 运行 Part 2 实验（支持 ARGS，如 make run-part2 ARGS="-n 5"）
 
@@ -512,7 +591,10 @@ sage -python -m pytest tests/test_musig2h_cpp.py -v   # C++ 交叉验证
 | `CMakeLists.txt` | CMake 构建：RELIC FetchContent + pybind11 + OpenSSL |
 | `curve25519.hpp/.cpp` | Scalar/Point 类、Curve25519 Weierstrass 封装、G/Z 计算、坐标转换 |
 | `hash_utils.hpp/.cpp` | SHA256 域分离哈希：H_agg、H_non、H_sig + 序列化工具 |
-| `bindings.cpp` | pybind11 模块 `fastmusig` 接口定义 |
+| `musig2h.hpp/.cpp` | MuSig2-H 8 个无状态算法 + 数据结构（KeyPair/PreSignResult/SignOutput） |
+| `signer.hpp/.cpp` | Signer 状态机：协议生命周期管理、nonce 安全销毁、缓存 apk/a |
+| `parallel_protocol.hpp/.cpp` | RelicThreadPool 线程池 + `run_protocol_parallel` 并行协议协调器 |
+| `bindings.cpp` | pybind11 模块 `fastmusig`：常量、哈希、算法、顺序/并行协议 |
 
 ### 测试
 
@@ -523,7 +605,7 @@ sage -python -m pytest tests/test_musig2h_cpp.py -v   # C++ 交叉验证
 | `tests/test_musig2h.py`      | 18     | 8 算法单元测试 + 1/2/3/5 人协议 + 安全性        |
 | `tests/test_signer.py`       | 14     | Signer 生命周期、nonce 安全、跳步报错           |
 | `tests/test_parallel.py`     | 9      | 协调器正确性、返回结构、可复现、安全性          |
-| `tests/test_musig2h_cpp.py`  | 34     | C++ ↔ Python 交叉验证：G/Z/q 一致性、哈希一致性 |
+| `tests/test_musig2h_cpp.py`  | 76     | C++ ↔ Python 交叉验证：常量、哈希、KeyAgg、签名互验、顺序/并行协议 |
 
 ### 文档
 
