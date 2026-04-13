@@ -14,6 +14,7 @@ Projet de recherche en deux parties autour des **fonctions de hachage linéaires
 - [README_CN_SECTION2.md](README_CN_SECTION2.md) — Guide d'implémentation Part 2
 - [docs/part2_background.md](docs/part2_background.md) — Motivation de recherche et pont Part 1 → Part 2
 - [docs/pari_thread_safety.md](docs/pari_thread_safety.md) — Analyse du problème de sécurité des threads PARI
+- [docs/cpp_relic_parallel_design.md](docs/cpp_relic_parallel_design.md) — Design technique du backend C++ RELIC parallèle
 
 ---
 
@@ -36,6 +37,14 @@ Observing-Linear-Hashing/
 │   │   ├── musig2h.py              #   8 algorithmes MuSig2-H + 3 hachages
 │   │   ├── signer.py               #   Classe Signer (état d'un participant)
 │   │   └── parallel_signing.py     #   Coordinateur de protocole (7 étapes)
+│   ├── cpp_musig/                   # Part 2 : backend C++ parallèle (RELIC + pybind11)
+│   │   ├── CMakeLists.txt          #   Configuration CMake (FetchContent RELIC)
+│   │   ├── curve25519.hpp/.cpp     #   Point/Scalar + Montgomery↔Weierstrass
+│   │   ├── hash_utils.hpp/.cpp     #   SHA256 hachage à séparation de domaines
+│   │   ├── musig2h.hpp/.cpp        #   8 algorithmes sans état
+│   │   ├── signer.hpp/.cpp         #   Machine à états Signer
+│   │   ├── parallel_protocol.hpp/.cpp # RelicThreadPool + protocole parallèle
+│   │   └── bindings.cpp            #   Module pybind11 "fastmusig"
 │   └── cpp/                         # Part 1 : backend C++ (pybind11)
 │       ├── linear_hash.hpp/cpp     #   Hachage linéaire F2 en C++
 │       ├── trial_maxload.hpp/cpp   #   Un trial avec Space-Saving C++
@@ -54,15 +63,18 @@ Observing-Linear-Hashing/
 │   ├── test_musig2h.py             #   Schéma de signature (18 tests)
 │   ├── test_signer.py              #   Classe Signer (14 tests)
 │   ├── test_parallel.py            #   Coordinateur de protocole (9 tests)
+│   ├── test_musig2h_cpp.py         #   Validation croisée C++↔Python (76 tests)
 │   └── example.py
 ├── docs/                            # Documentation
 │   ├── part2_background.md         #   Contexte de recherche Part 2
-│   └── pari_thread_safety.md       #   Analyse sécurité threads PARI
+│   ├── pari_thread_safety.md       #   Analyse sécurité threads PARI
+│   └── cpp_relic_parallel_design.md #  Design technique C++ RELIC parallèle
 ├── papers/                          # Références bibliographiques (PDF)
 ├── profiling/                       # Résultats de profilage (CPU/mémoire)
 ├── scripts/
-│   ├── compare.py                  # Benchmark Python vs C++
-│   └── profile_musig2h.py          # Profilage Part 2
+│   ├── compare.py                  # Benchmark Part 1 Python vs C++
+│   ├── profile_musig2h.py          # Profilage Part 2
+│   └── bench_musig2h.py            # Benchmark Part 2 Python vs C++ (Phase 4)
 ├── data/                            # Résultats d'expériences
 └── .gitignore
 ```
@@ -90,6 +102,10 @@ make run-part1         # Lancer les expériences Part 1 (supporte ARGS)
 make run-part2         # Lancer les expériences Part 2 (supporte ARGS)
 make profile-part2     # Profilage Part 2 (benchmark + crash threads)
 make profile-part2-cpu # Graphe d'appels CPU Part 2 (cProfile + gprof2dot)
+make build-musig       # Compiler le backend C++ MuSig2-H (RELIC + pybind11)
+make test-part2-cpp    # Tests de validation croisée C++ (76 tests)
+make bench-part2       # Benchmark Part 2 : Python vs C++ (séquentiel + parallèle)
+make bench-part2-fast  # Benchmark Part 2 mode rapide
 make clean             # Nettoyer les artefacts de compilation
 ```
 
@@ -502,6 +518,98 @@ L'utilisation de `ThreadPoolExecutor` pour paralléliser les étapes ①③⑤ p
 Les étapes parallélisables sont exécutées **séquentiellement**, avec des commentaires dans le code marquant clairement la parallélisabilité. Ceci reflète fidèlement la conception du protocole.
 
 Pour une exécution véritablement parallèle : C++ avec la bibliothèque RELIC (thread-safe), ou multi-processus avec sérialisation manuelle (coordonnées entières des points).
+
+---
+
+## Backend C++ parallèle — RELIC (Phases 1–4, toutes complétées ✅)
+
+### Motivation
+
+La pile globale PARI interdit tout parallélisme en Python. Le projet utilise **RELIC** (bibliothèque cryptographique thread-safe) + `std::thread` pour implémenter une exécution véritablement parallèle des phases KeyGen / PreSign / Sign, exposée à Python via **pybind11** (module `fastmusig`).
+
+### Architecture
+
+```
+Python (appelant)
+    │
+    │  pybind11 (GIL libéré)
+    ▼
+fastmusig.cpython-313-darwin.so
+    │
+    ├── parallel_protocol  ── RelicThreadPool (std::thread)
+    │       ├── [parallèle] KeyGen × n
+    │       ├── [séquentiel] KeyAgg
+    │       ├── [parallèle] PreSign × n    ← synchronisation 1
+    │       ├── [séquentiel] PreAgg
+    │       ├── [parallèle] Sign × n       ← synchronisation 2
+    │       ├── [séquentiel] SignAgg
+    │       └── [séquentiel] Ver
+    │
+    ├── musig2h          ── 8 algorithmes sans état
+    ├── signer           ── Machine à états Signer
+    ├── hash_utils       ── SHA256 hachage à séparation de domaines
+    └── curve25519       ── Encapsulation courbe RELIC
+                              └── librelic_s.a (lien statique)
+```
+
+### Phases d'implémentation
+
+| Phase | Contenu | Fichiers | Tests |
+|-------|---------|----------|-------|
+| 1 | Courbe + hachage (Montgomery ↔ Weierstrass, G/Z, H_agg/H_non/H_sig) | `curve25519.hpp/.cpp`, `hash_utils.hpp/.cpp` | 34 |
+| 2 | 8 algorithmes + Signer + protocole séquentiel | `musig2h.hpp/.cpp`, `signer.hpp/.cpp` | +24 |
+| 3 | RelicThreadPool + protocole parallèle | `parallel_protocol.hpp/.cpp` | +18 |
+| 4 | Benchmark de performance (Python vs C++) | `scripts/bench_musig2h.py` | — |
+
+**Total : 76 tests de validation croisée** (C++ ↔ Python, `tests/test_musig2h_cpp.py`).
+
+### Benchmark de performance (Phase 4)
+
+```bash
+make bench-part2       # Benchmark complet (n=1..100, threads=1..12)
+make bench-part2-fast  # Mode rapide (n=1..20)
+```
+
+#### Résultats : Python séquentiel vs C++ parallèle (1/2/4/8/12 threads)
+
+| n | Python seq | C++ 1t | C++ 2t | C++ 4t | C++ 8t | C++ 12t | Accélération Py→C++12t |
+|---|-----------|--------|--------|--------|--------|---------|----------------------|
+| 1 | 8.4ms | 5.7ms | 5.7ms | 5.7ms | 5.7ms | 5.7ms | 1.5x |
+| 5 | 35.9ms | 17.5ms | 12.4ms | 9.9ms | 7.6ms | 7.9ms | 4.7x |
+| 10 | 70.1ms | 32.7ms | 19.4ms | 14.4ms | 12.8ms | 12.0ms | 5.9x |
+| 20 | 138.8ms | 62.8ms | 37.0ms | 23.2ms | 20.4ms | 20.1ms | 6.9x |
+| 50 | 344.7ms | 158.7ms | 87.6ms | 54.1ms | 40.7ms | 39.9ms | 8.6x |
+| 100 | 705.6ms | 311.4ms | 174.2ms | 104.2ms | 76.9ms | 73.2ms | **9.6x** |
+
+#### C++ parallèle vs Python :
+
+![C++ parallel vs Python](profiling/part2/bench_cpp_vs_python.png)
+
+#### Accélération réelle vs loi d'Amdahl théorique :
+
+![Speedup vs Amdahl](profiling/part2/bench_speedup_vs_amdahl.png)
+
+#### Temps C++ vs nombre de signataires :
+
+![C++ time vs signers](profiling/part2/bench_cpp_time_vs_signers.png)
+
+#### Analyse
+
+- **Fraction parallélisable** : 92.2% (n=100)
+- **Accélération C++ 12 threads vs 1 thread** : 4.25x (théorique Amdahl : 6.46x, efficacité : 65.9%)
+- **Accélération Python → C++ 12 threads** : 9.6x (n=100)
+- L'écart entre théorie et réalité s'explique par le coût de synchronisation (barriers), la gestion du pool de threads, et la contention mémoire
+
+### Construction
+
+```bash
+# Dépendances : CMake ≥ 3.16, C++17, OpenSSL 3, pybind11
+# RELIC est récupéré automatiquement via CMake FetchContent
+
+make build-musig       # Compiler le backend C++
+make test-part2-cpp    # 76 tests de validation croisée
+make bench-part2       # Benchmark complet
+```
 
 ---
 
