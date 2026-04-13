@@ -39,6 +39,8 @@ pybind11_add_module(fastmusig
     bindings.cpp
     curve25519.cpp
     hash_utils.cpp
+    musig2h.cpp
+    signer.cpp
 )
 
 target_link_libraries(fastmusig PRIVATE relic_s OpenSSL::Crypto)
