@@ -228,11 +228,11 @@ sage -python -m src.crypto.parallel_signing -n 10 -m 'vote yes' -s 0  # 自定�
 sage -python -m src.crypto.parallel_signing -h           # 查看帮助
 ```
 
-| 参数 | 说明 | 默认值 |
-|------|------|--------|
-| `-n` / `--n-signers` | 签名者数量 | 3 |
-| `-m` / `--message` | 待签消息 | `Hello MuSig2-H` |
-| `-s` / `--seed` | 随机种子 | 42 |
+| 参数                     | 说明       | 默认值             |
+| ------------------------ | ---------- | ------------------ |
+| `-n` / `--n-signers` | 签名者数量 | 3                  |
+| `-m` / `--message`   | 待签消息   | `Hello MuSig2-H` |
+| `-s` / `--seed`      | 随机种子   | 42                 |
 
 输出示例：
 
@@ -301,18 +301,18 @@ PARI 线程不安全（100% segfault）、SageMath 对象无法跨进程序列�
 
 ### 实现进度
 
-#### Phase 1：基础层 ✅
+#### Phase 1：基础层 
 
 椭圆曲线封装和域分离哈希函数，已通过 34 个交叉验证测试。
 
 **源码文件（`src/cpp_musig/`）：**
 
-| 文件 | 说明 |
-|------|------|
-| `CMakeLists.txt` | 构建配置：FetchContent 拉取 RELIC、pybind11（Python 3.13）、OpenSSL 3 |
-| `curve25519.hpp/.cpp` | Scalar/Point 类、G/Z 计算、Montgomery ↔ Weierstrass 坐标转换 |
-| `hash_utils.hpp/.cpp` | SHA256 域分离哈希：H_agg(tag=1)、H_non(tag=2)、H_sig(tag=3) |
-| `bindings.cpp` | pybind11 模块 `fastmusig`，导出常量和哈希函数 |
+| 文件                    | 说明                                                                  |
+| ----------------------- | --------------------------------------------------------------------- |
+| `CMakeLists.txt`      | 构建配置：FetchContent 拉取 RELIC、pybind11（Python 3.13）、OpenSSL 3 |
+| `curve25519.hpp/.cpp` | Scalar/Point 类、G/Z 计算、Montgomery ↔ Weierstrass 坐标转换         |
+| `hash_utils.hpp/.cpp` | SHA256 域分离哈希：H_agg(tag=1)、H_non(tag=2)、H_sig(tag=3)           |
+| `bindings.cpp`        | pybind11 模块 `fastmusig`，导出常量和哈希函数                       |
 
 **关键技术点：**
 
@@ -323,37 +323,37 @@ PARI 线程不安全（100% segfault）、SageMath 对象无法跨进程序列�
 
 **预计算常量（`curve25519.cpp`，均为十六进制）：**
 
-| 常量 | 值 | 含义 |
-|------|----|------|
-| `P_STR` | `2^255 - 19` | 有限域模数 p，定义 F_p |
-| `A_MONT` | `486662`（`0x76D06`） | Montgomery 曲线系数 A，即 `y² = x³ + Ax² + x` |
-| `Q_STR` | `2^252 + 2774...8493` | 素数阶子群阶 q，曲线总阶 = 8q（cofactor = 8） |
-| `A_DIV_3` | `A × 3⁻¹ mod p` | 坐标转换常量，486662/3 在整数上不整除，但模 p 下 3 有逆元 |
-| `A_W` | `(3 - A²)/3 mod p` | Weierstrass 系数 a_w，由 Montgomery A 推导 |
-| `B_W` | `(2A³ - 9A)/27 mod p` | Weierstrass 系数 b_w，使 RELIC 能原生运算 Curve25519 |
+| 常量        | 值                        | 含义                                                      |
+| ----------- | ------------------------- | --------------------------------------------------------- |
+| `P_STR`   | `2^255 - 19`            | 有限域模数 p，定义 F_p                                    |
+| `A_MONT`  | `486662`（`0x76D06`） | Montgomery 曲线系数 A，即 `y² = x³ + Ax² + x`        |
+| `Q_STR`   | `2^252 + 2774...8493`   | 素数阶子群阶 q，曲线总阶 = 8q（cofactor = 8）             |
+| `A_DIV_3` | `A × 3⁻¹ mod p`      | 坐标转换常量，486662/3 在整数上不整除，但模 p 下 3 有逆元 |
+| `A_W`     | `(3 - A²)/3 mod p`     | Weierstrass 系数 a_w，由 Montgomery A 推导                |
+| `B_W`     | `(2A³ - 9A)/27 mod p`  | Weierstrass 系数 b_w，使 RELIC 能原生运算 Curve25519      |
 
 **交叉验证结果：**
 
-| 验证项 | 结果 |
-|--------|------|
-| G 坐标（Montgomery 64 bytes） | C++ == Python ✅ |
-| Z 坐标（Montgomery 64 bytes） | C++ == Python ✅ |
-| q 值（big-endian 32 bytes） | C++ == Python ✅ |
-| H_agg 输出（固定输入） | C++ == Python ✅ |
-| H_non 输出（固定输入） | C++ == Python ✅ |
-| H_sig 输出（固定输入） | C++ == Python ✅ |
-| pk list 排序序列化 | C++ == Python ✅ |
+| 验证项                        | 结果            |
+| ----------------------------- | --------------- |
+| G 坐标（Montgomery 64 bytes） | C++ == Python   |
+| Z 坐标（Montgomery 64 bytes） | C++ == Python   |
+| q 值（big-endian 32 bytes）   | C++ == Python   |
+| H_agg 输出（固定输入）        | C++ == Python   |
+| H_non 输出（固定输入）        | C++ == Python   |
+| H_sig 输出（固定输入）        | C++ == Python  |
+| pk list 排序序列化            | C++ == Python   |
 
-#### Phase 2：算法层 ✅
+#### Phase 2：算法层 
 
 8 个 MuSig2-H 算法 + Signer 状态机 + 交叉签名验证，已通过 24 个新增测试（共 58 个）。
 
 **新增源码文件（`src/cpp_musig/`）：**
 
-| 文件 | 说明 |
-|------|------|
+| 文件                 | 说明                                                                              |
+| -------------------- | --------------------------------------------------------------------------------- |
 | `musig2h.hpp/.cpp` | 8 个无状态算法：keygen、key_agg、key_agg_ex、presign、preagg、sign、sign_agg、ver |
-| `signer.hpp/.cpp` | Signer 状态机：生命周期管理、nonce 签名后自动销毁、`std::optional` 状态控制 |
+| `signer.hpp/.cpp`  | Signer 状态机：生命周期管理、nonce 签名后自动销毁、`std::optional` 状态控制     |
 
 **关键设计点：**
 
@@ -364,24 +364,24 @@ PARI 线程不安全（100% segfault）、SageMath 对象无法跨进程序列�
 
 **交叉验证结果（24 个新增测试）：**
 
-| 验证项 | 结果 |
-|--------|------|
-| KeyAgg apk 一致性（2 点 / 单点 / 顺序无关） | C++ == Python ✅ |
-| key_agg_ex 系数一致性（3 个生成密钥） | C++ == Python ✅ |
-| Python 签名 → C++ ver（2/3/5 签名者） | 验证通过 ✅ |
-| C++ ver 拒绝篡改（wrong msg / s0 / s1） | 正确拒绝 ✅ |
-| C++ run_protocol_sequential 自验（1/2/3/5/10 签名者） | 验证通过 ✅ |
-| C++ 签名 → Python ver（2/3/5/10 签名者） | 验证通过 ✅ |
+| 验证项                                                | 结果            |
+| ----------------------------------------------------- | --------------- |
+| KeyAgg apk 一致性（2 点 / 单点 / 顺序无关）           | C++ == Python  |
+| key_agg_ex 系数一致性（3 个生成密钥）                 | C++ == Python   |
+| Python 签名 → C++ ver（2/3/5 签名者）                | 验证通过        |
+| C++ ver 拒绝篡改（wrong msg / s0 / s1）               | 正确拒绝        |
+| C++ run_protocol_sequential 自验（1/2/3/5/10 签名者） | 验证通过        |
+| C++ 签名 → Python ver（2/3/5/10 签名者）             | 验证通过        |
 
-#### Phase 3：并行层 ✅
+#### Phase 3：并行层 
 
 RelicThreadPool 线程池 + `run_protocol_parallel` 并行协议，已通过 18 个新增测试（共 76 个）。
 
 **新增源码文件（`src/cpp_musig/`）：**
 
-| 文件 | 说明 |
-|------|------|
-| `parallel_protocol.hpp/.cpp` | RelicThreadPool 线程池 + `run_protocol_parallel` 7步并行协议 |
+| 文件                           | 说明                                                          |
+| ------------------------------ | ------------------------------------------------------------- |
+| `parallel_protocol.hpp/.cpp` | RelicThreadPool 线程池 +`run_protocol_parallel` 7步并行协议 |
 
 **RelicThreadPool 设计（设计文档 Section 9）：**
 
@@ -405,21 +405,44 @@ pool = RelicThreadPool(n_threads)    ← 线程启动，各调 core_init() + 曲
 
 **交叉验证结果（18 个新增测试）：**
 
-| 验证项 | 结果 |
-|--------|------|
-| 并行协议自验（1/2/3/5/10/50 签名者） | 验证通过 ✅ |
-| 确定性：同 seed 两次并行结果一致 | 一致 ✅ |
-| 不同 seed 产生不同签名 | 不同 ✅ |
-| **并行 == 顺序**（同 seed → 相同 R/s0/s1/apk） | 完全一致 ✅ |
-| C++ 并行签名 → Python ver（3/5/10 签名者） | 验证通过 ✅ |
-| 线程边界（num_threads=1 / threads>signers） | 正确处理 ✅ |
-| 空消息 / 10KB 消息 | 验证通过 ✅ |
-| timing dict 包含 8 个阶段 key | 结构正确 ✅ |
-| result 字段和字节长度 | 格式正确 ✅ |
+| 验证项                                                | 结果       |
+| ----------------------------------------------------- | ---------- |
+| 并行协议自验（1/2/3/5/10/50 签名者）                  | 验证通过   |
+| 确定性：同 seed 两次并行结果一致                      | 一致       |
+| 不同 seed 产生不同签名                                | 不同       |
+| **并行 == 顺序**（同 seed → 相同 R/s0/s1/apk） | 完全一致   |
+| C++ 并行签名 → Python ver（3/5/10 签名者）           | 验证通过   |
+| 线程边界（num_threads=1 / threads>signers）           | 正确处理   |
+| 空消息 / 10KB 消息                                    | 验证通过   |
+| timing dict 包含 8 个阶段 key                         | 结构正确   |
+| result 字段和字节长度                                 | 格式正确  |
 
-#### Phase 4：集成（待实现）
+#### Phase 4：性能基准（bench-part2）
 
-bench-part2 基准测试 + 文档更新。
+Python vs C++ 性能对比基准测试，生成 3 张图表到 `profiling/part2/`：
+
+**基准测试结果（n=100, 12线程）：**
+
+- Python seq → C++ parallel 加速比：**9.6x**（705ms → 73ms）
+- C++ 并行加速比（1→12线程）：**4.25x**
+- 并行化比例 92.2%，Amdahl 理论 6.46x，实测效率 65.9%
+
+**C++ 并行 vs Python 总时间：**
+
+![C++ parallel vs Python](profiling/part2/bench_cpp_vs_python.png)
+
+**实测加速比 vs Amdahl 理论：**
+
+![Speedup vs Amdahl](profiling/part2/bench_speedup_vs_amdahl.png)
+
+**C++ 各线程数下 time vs 签名者数量：**
+
+![C++ time vs signers](profiling/part2/bench_cpp_time_vs_signers.png)
+
+```bash
+make bench-part2       # 完整基准测试
+make bench-part2-fast  # 快速模式（缩减扫描范围）
+```
 
 ### 构建与测试
 
@@ -586,34 +609,34 @@ sage -python -m pytest tests/test_musig2h_cpp.py -v   # C++ 交叉验证
 
 ### C++ 源码（`src/cpp_musig/`）
 
-| 文件 | 职责 |
-|------|------|
-| `CMakeLists.txt` | CMake 构建：RELIC FetchContent + pybind11 + OpenSSL |
-| `curve25519.hpp/.cpp` | Scalar/Point 类、Curve25519 Weierstrass 封装、G/Z 计算、坐标转换 |
-| `hash_utils.hpp/.cpp` | SHA256 域分离哈希：H_agg、H_non、H_sig + 序列化工具 |
-| `musig2h.hpp/.cpp` | MuSig2-H 8 个无状态算法 + 数据结构（KeyPair/PreSignResult/SignOutput） |
-| `signer.hpp/.cpp` | Signer 状态机：协议生命周期管理、nonce 安全销毁、缓存 apk/a |
-| `parallel_protocol.hpp/.cpp` | RelicThreadPool 线程池 + `run_protocol_parallel` 并行协议协调器 |
-| `bindings.cpp` | pybind11 模块 `fastmusig`：常量、哈希、算法、顺序/并行协议 |
+| 文件                           | 职责                                                                   |
+| ------------------------------ | ---------------------------------------------------------------------- |
+| `CMakeLists.txt`             | CMake 构建：RELIC FetchContent + pybind11 + OpenSSL                    |
+| `curve25519.hpp/.cpp`        | Scalar/Point 类、Curve25519 Weierstrass 封装、G/Z 计算、坐标转换       |
+| `hash_utils.hpp/.cpp`        | SHA256 域分离哈希：H_agg、H_non、H_sig + 序列化工具                    |
+| `musig2h.hpp/.cpp`           | MuSig2-H 8 个无状态算法 + 数据结构（KeyPair/PreSignResult/SignOutput） |
+| `signer.hpp/.cpp`            | Signer 状态机：协议生命周期管理、nonce 安全销毁、缓存 apk/a            |
+| `parallel_protocol.hpp/.cpp` | RelicThreadPool 线程池 +`run_protocol_parallel` 并行协议协调器       |
+| `bindings.cpp`               | pybind11 模块 `fastmusig`：常量、哈希、算法、顺序/并行协议           |
 
 ### 测试
 
-| 文件                           | 测试数 | 覆盖内容                                       |
-| ------------------------------ | ------ | ---------------------------------------------- |
-| `tests/test_curve.py`        | 21     | 素数域、曲线阶、子群、算术性质、随机标量        |
-| `tests/test_lhf.py`          | 15     | 线性性、满同态、非单射、接口兼容                |
-| `tests/test_musig2h.py`      | 18     | 8 算法单元测试 + 1/2/3/5 人协议 + 安全性        |
-| `tests/test_signer.py`       | 14     | Signer 生命周期、nonce 安全、跳步报错           |
-| `tests/test_parallel.py`     | 9      | 协调器正确性、返回结构、可复现、安全性          |
-| `tests/test_musig2h_cpp.py`  | 76     | C++ ↔ Python 交叉验证：常量、哈希、KeyAgg、签名互验、顺序/并行协议 |
+| 文件                          | 测试数 | 覆盖内容                                                            |
+| ----------------------------- | ------ | ------------------------------------------------------------------- |
+| `tests/test_curve.py`       | 21     | 素数域、曲线阶、子群、算术性质、随机标量                            |
+| `tests/test_lhf.py`         | 15     | 线性性、满同态、非单射、接口兼容                                    |
+| `tests/test_musig2h.py`     | 18     | 8 算法单元测试 + 1/2/3/5 人协议 + 安全性                            |
+| `tests/test_signer.py`      | 14     | Signer 生命周期、nonce 安全、跳步报错                               |
+| `tests/test_parallel.py`    | 9      | 协调器正确性、返回结构、可复现、安全性                              |
+| `tests/test_musig2h_cpp.py` | 76     | C++ ↔ Python 交叉验证：常量、哈希、KeyAgg、签名互验、顺序/并行协议 |
 
 ### 文档
 
-| 文件                                  | 说明                                    |
-| ------------------------------------- | --------------------------------------- |
-| `README_CN_SECTION2.md`             | 本文件，Part 2 实现指南                 |
-| `docs/part2_background.md`          | 研究动机、Part 1 到 Part 2 的桥梁       |
-| `docs/pari_thread_safety.md`        | PARI 线程安全问题的完整分析             |
-| `docs/cpp_relic_parallel_design.md`  | C++ RELIC 并行 MuSig2-H 技术设计文档    |
+| 文件                                  | 说明                                 |
+| ------------------------------------- | ------------------------------------ |
+| `README_CN_SECTION2.md`             | 本文件，Part 2 实现指南              |
+| `docs/part2_background.md`          | 研究动机、Part 1 到 Part 2 的桥梁    |
+| `docs/pari_thread_safety.md`        | PARI 线程安全问题的完整分析          |
+| `docs/cpp_relic_parallel_design.md` | C++ RELIC 并行 MuSig2-H 技术设计文档 |
 
 [^amdahl]: G. M. Amdahl, "Validity of the Single Processor Approach to Achieving Large Scale Computing Capabilities", *AFIPS Conference Proceedings*, 1967, pp. 483–485.

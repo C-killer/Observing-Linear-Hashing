@@ -3,7 +3,8 @@ VENV := .venv313/bin/python
 
 .PHONY: test-part1 test-part2 test-part2-cpp test-all build-cpp build-musig \
        run-part1 run-part2 clean help \
-       benchmark-part1 profile-part2 profile-part2-fast profile-part2-cpu
+       benchmark-part1 profile-part2 profile-part2-fast profile-part2-cpu \
+       bench-part2 bench-part2-fast
 
 help:  ## Show help information
 	@grep -E '^[a-zA-Z0-9_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
@@ -48,6 +49,12 @@ profile-part2-cpu:  ## Part 2 CPU profiling (cProfile + call graph)
 	sage -python scripts/profile_cpu_runner.py
 	gprof2dot -f pstats profiling/part2/profile_musig2h.prof | dot -Tpng -o profiling/part2/profile_musig2h.png
 	@echo "[Done] Call graph: profiling/part2/profile_musig2h.png"
+
+bench-part2: build-musig  ## Part 2 benchmark: Python vs C++ (sequential + parallel)
+	sage -python scripts/bench_musig2h.py $(ARGS)
+
+bench-part2-fast: build-musig  ## Part 2 benchmark (fast mode, reduced sweep)
+	sage -python scripts/bench_musig2h.py --fast $(ARGS)
 
 # === All ===
 test-all: test-part1 test-part2 test-part2-cpp  ## Run all tests
