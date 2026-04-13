@@ -3,9 +3,12 @@ Cross-validation tests: C++ fastmusig ↔ Python/SageMath.
 
 Phase 1: curve25519 (G, Z, q, Scalar, Point, coordinate conversion)
          hash_utils (H_agg, H_non, H_sig, serialization)
+Phase 2: musig2h algorithms (keygen, key_agg, ver, sign, full protocol)
+         cross-signing (C++ sign → Python ver, Python sign → C++ ver)
 """
 
 import pytest
+import random
 from sage.all import Integer, ZZ
 
 import fastmusig
@@ -13,8 +16,10 @@ from src.crypto.curve import G, Z, O, q, p, E, scalar_mult, point_add, random_sc
 from src.crypto.lhf import F
 from src.crypto.musig2h import (
     _point_to_bytes, _int_to_bytes, _serialize_pk_list,
-    H_agg, H_non, H_sig, keygen,
+    H_agg, H_non, H_sig, keygen, key_agg, key_agg_ex,
+    presign, preagg, sign, sign_agg, ver,
 )
+from src.crypto.signer import Signer
 
 
 # ═══════════════════════════════════════════
@@ -37,7 +42,7 @@ def init_curve():
 
 
 # ═══════════════════════════════════════════
-#  Curve constants consistency
+#  Phase 1: Curve constants consistency
 # ═══════════════════════════════════════════
 
 class TestCurveConstants:
@@ -72,7 +77,7 @@ class TestCurveConstants:
 
 
 # ═══════════════════════════════════════════
-#  Point serialization round-trip
+#  Phase 1: Point serialization round-trip
 # ═══════════════════════════════════════════
 
 class TestPointSerialization:
@@ -95,7 +100,6 @@ class TestPointSerialization:
 
     def test_multiple_points_consistency(self):
         """Multiple derived points serialize consistently."""
-        import random
         rng = random.Random(12345)
         for _ in range(5):
             k = random_scalar(rng)
@@ -107,7 +111,7 @@ class TestPointSerialization:
 
 
 # ═══════════════════════════════════════════
-#  H_agg cross-validation
+#  Phase 1: H_agg cross-validation
 # ═══════════════════════════════════════════
 
 class TestHAgg:
@@ -158,7 +162,6 @@ class TestHAgg:
 
     def test_with_generated_keys(self):
         """H_agg with KeyGen-produced keys."""
-        import random
         rng = random.Random(999)
         keys = [keygen(rng) for _ in range(3)]
         pks = [pk for _, pk in keys]
@@ -170,7 +173,7 @@ class TestHAgg:
 
 
 # ═══════════════════════════════════════════
-#  H_sig cross-validation
+#  Phase 1: H_sig cross-validation
 # ═══════════════════════════════════════════
 
 class TestHSig:
@@ -204,7 +207,7 @@ class TestHSig:
 
 
 # ═══════════════════════════════════════════
-#  H_non cross-validation
+#  Phase 1: H_non cross-validation
 # ═══════════════════════════════════════════
 
 class TestHNon:
@@ -238,7 +241,6 @@ class TestHNon:
 
     def test_with_derived_points(self):
         """H_non with points derived from scalar multiplication."""
-        import random
         rng = random.Random(42)
         nonces_py = [scalar_mult(random_scalar(rng), G) for _ in range(4)]
         apk = scalar_mult(random_scalar(rng), G)
@@ -251,7 +253,7 @@ class TestHNon:
 
 
 # ═══════════════════════════════════════════
-#  Pk list serialization consistency
+#  Phase 1: Pk list serialization consistency
 # ═══════════════════════════════════════════
 
 class TestPkListSerialization:
@@ -265,7 +267,6 @@ class TestPkListSerialization:
 
     def test_three_generated_keys(self):
         """Serialization of 3 keygen'd public keys is deterministic."""
-        import random
         rng = random.Random(777)
         pks = [keygen(rng)[1] for _ in range(3)]
         s1 = _serialize_pk_list(pks)
@@ -275,7 +276,7 @@ class TestPkListSerialization:
 
 
 # ═══════════════════════════════════════════
-#  Hash output range
+#  Phase 1: Hash output range
 # ═══════════════════════════════════════════
 
 class TestHashRange:
@@ -299,3 +300,252 @@ class TestHashRange:
             fastmusig.H_non_bytes(py_point_bytes(G), nonce_bytes, b"y"), "big"
         )
         assert 0 <= val < int(q)
+
+
+# ═══════════════════════════════════════════
+#  Phase 2: KeyAgg cross-validation
+# ═══════════════════════════════════════════
+
+class TestKeyAgg:
+    """KeyAgg must produce identical apk and coefficients."""
+
+    def test_key_agg_two_points(self):
+        """KeyAgg([G, Z]) must match between C++ and Python."""
+        L = [G, Z]
+        py_apk = key_agg(L)
+        cpp_apk = fastmusig.key_agg([py_point_bytes(pk) for pk in L])
+        assert cpp_apk == py_point_bytes(py_apk)
+
+    def test_key_agg_ex_coefficients(self):
+        """key_agg_ex coefficients must match for 3 generated keys."""
+        rng = random.Random(123)
+        keys = [keygen(rng) for _ in range(3)]
+        pks = [pk for _, pk in keys]
+
+        py_apk, py_coeffs = key_agg_ex(pks)
+        L_bytes = [py_point_bytes(pk) for pk in pks]
+        cpp_apk, cpp_coeffs = fastmusig.key_agg_ex(L_bytes)
+
+        assert cpp_apk == py_point_bytes(py_apk)
+        for i, pk in enumerate(pks):
+            assert cpp_coeffs[i] == py_scalar_bytes(py_coeffs[pk])
+
+    def test_key_agg_single_key(self):
+        """KeyAgg with single key."""
+        L = [G]
+        py_apk = key_agg(L)
+        cpp_apk = fastmusig.key_agg([py_point_bytes(G)])
+        assert cpp_apk == py_point_bytes(py_apk)
+
+    def test_key_agg_order_invariance(self):
+        """KeyAgg result should not depend on input order (sorts internally)."""
+        rng = random.Random(456)
+        keys = [keygen(rng) for _ in range(4)]
+        pks = [pk for _, pk in keys]
+
+        L_bytes_1 = [py_point_bytes(pk) for pk in pks]
+        L_bytes_2 = [py_point_bytes(pk) for pk in reversed(pks)]
+        assert fastmusig.key_agg(L_bytes_1) == fastmusig.key_agg(L_bytes_2)
+
+
+# ═══════════════════════════════════════════
+#  Phase 2: Ver cross-validation
+# ═══════════════════════════════════════════
+
+class TestVer:
+    """C++ ver must accept valid Python signatures and reject invalid ones."""
+
+    def _run_python_protocol(self, n_signers, msg, seed=42):
+        """Run full Python protocol, return (apk, sigma)."""
+        rng_base = random.Random(seed)
+        signers = [Signer(seed=seed + i) for i in range(n_signers)]
+        all_pks = [s.pk for s in signers]
+        apk, coeffs = key_agg_ex(all_pks)
+        for s in signers:
+            s.set_peers([pk for pk in all_pks if pk != s.pk])
+            s.set_agg_key(apk, coeffs[s.pk])
+        pp_list = [s.presign() for s in signers]
+        app = preagg(pp_list)
+        for s in signers:
+            s.receive_agg_nonce(app)
+        outs = [s.sign(msg) for s in signers]
+        sigma = sign_agg(outs)
+        return apk, sigma
+
+    def test_python_sign_cpp_ver_2_signers(self):
+        """Python 2-signer signature verified by C++ ver."""
+        msg = b"hello from python"
+        apk, sigma = self._run_python_protocol(2, msg)
+        R, (s0, s1) = sigma
+        assert fastmusig.ver(
+            py_point_bytes(apk), msg,
+            py_point_bytes(R), py_scalar_bytes(s0), py_scalar_bytes(s1)
+        )
+
+    def test_python_sign_cpp_ver_3_signers(self):
+        """Python 3-signer signature verified by C++ ver."""
+        msg = b"three signers"
+        apk, sigma = self._run_python_protocol(3, msg, seed=100)
+        R, (s0, s1) = sigma
+        assert fastmusig.ver(
+            py_point_bytes(apk), msg,
+            py_point_bytes(R), py_scalar_bytes(s0), py_scalar_bytes(s1)
+        )
+
+    def test_python_sign_cpp_ver_5_signers(self):
+        """Python 5-signer signature verified by C++ ver."""
+        msg = b"five signers"
+        apk, sigma = self._run_python_protocol(5, msg, seed=200)
+        R, (s0, s1) = sigma
+        assert fastmusig.ver(
+            py_point_bytes(apk), msg,
+            py_point_bytes(R), py_scalar_bytes(s0), py_scalar_bytes(s1)
+        )
+
+    def test_ver_rejects_wrong_message(self):
+        """Verification fails if message is tampered."""
+        msg = b"original"
+        apk, sigma = self._run_python_protocol(2, msg)
+        R, (s0, s1) = sigma
+        assert not fastmusig.ver(
+            py_point_bytes(apk), b"tampered",
+            py_point_bytes(R), py_scalar_bytes(s0), py_scalar_bytes(s1)
+        )
+
+    def test_ver_rejects_wrong_s0(self):
+        """Verification fails if s0 is tampered."""
+        msg = b"test"
+        apk, sigma = self._run_python_protocol(2, msg)
+        R, (s0, s1) = sigma
+        bad_s0 = (s0 + 1) % int(q)
+        assert not fastmusig.ver(
+            py_point_bytes(apk), msg,
+            py_point_bytes(R), py_scalar_bytes(bad_s0), py_scalar_bytes(s1)
+        )
+
+    def test_ver_rejects_wrong_s1(self):
+        """Verification fails if s1 is tampered."""
+        msg = b"test"
+        apk, sigma = self._run_python_protocol(2, msg)
+        R, (s0, s1) = sigma
+        bad_s1 = (s1 + 1) % int(q)
+        assert not fastmusig.ver(
+            py_point_bytes(apk), msg,
+            py_point_bytes(R), py_scalar_bytes(s0), py_scalar_bytes(bad_s1)
+        )
+
+
+# ═══════════════════════════════════════════
+#  Phase 2: C++ sequential protocol
+# ═══════════════════════════════════════════
+
+class TestSequentialProtocol:
+    """C++ run_protocol_sequential must self-verify."""
+
+    def test_1_signer(self):
+        result = fastmusig.run_protocol_sequential(1, b"solo", seed=42)
+        assert result["verified"] is True
+
+    def test_2_signers(self):
+        result = fastmusig.run_protocol_sequential(2, b"duo", seed=42)
+        assert result["verified"] is True
+
+    def test_3_signers(self):
+        result = fastmusig.run_protocol_sequential(3, b"trio", seed=42)
+        assert result["verified"] is True
+
+    def test_5_signers(self):
+        result = fastmusig.run_protocol_sequential(5, b"five", seed=42)
+        assert result["verified"] is True
+
+    def test_10_signers(self):
+        result = fastmusig.run_protocol_sequential(10, b"ten", seed=42)
+        assert result["verified"] is True
+
+    def test_different_seeds(self):
+        """Different seeds produce different signatures but all verify."""
+        for seed in [0, 1, 42, 999, 2**32]:
+            result = fastmusig.run_protocol_sequential(3, b"test", seed=seed)
+            assert result["verified"] is True
+
+    def test_different_messages(self):
+        """Different messages produce different signatures."""
+        r1 = fastmusig.run_protocol_sequential(3, b"msg1", seed=42)
+        r2 = fastmusig.run_protocol_sequential(3, b"msg2", seed=42)
+        assert r1["verified"] is True
+        assert r2["verified"] is True
+        assert r1["R"] != r2["R"] or r1["s0"] != r2["s0"]
+
+    def test_empty_message(self):
+        result = fastmusig.run_protocol_sequential(2, b"", seed=42)
+        assert result["verified"] is True
+
+    def test_long_message(self):
+        result = fastmusig.run_protocol_sequential(2, b"A" * 10000, seed=42)
+        assert result["verified"] is True
+
+    def test_result_fields(self):
+        """Result dict has all expected fields."""
+        result = fastmusig.run_protocol_sequential(3, b"test", seed=42)
+        assert "apk" in result
+        assert "R" in result
+        assert "s0" in result
+        assert "s1" in result
+        assert "verified" in result
+        assert "n_signers" in result
+        assert result["n_signers"] == 3
+        assert len(result["apk"]) == 64
+        assert len(result["R"]) == 64
+        assert len(result["s0"]) == 32
+        assert len(result["s1"]) == 32
+
+
+# ═══════════════════════════════════════════
+#  Phase 2: C++ sign → Python ver (cross-signing)
+# ═══════════════════════════════════════════
+
+class TestCppSignPythonVer:
+    """Signatures produced by C++ must be verifiable by Python ver."""
+
+    def _cpp_sigma_to_python(self, result):
+        """Convert C++ result dict to Python (apk, sigma) for ver()."""
+        from src.crypto.curve import E, Fp
+        apk_bytes = result["apk"]
+        R_bytes = result["R"]
+        s0_bytes = result["s0"]
+        s1_bytes = result["s1"]
+
+        # Deserialize apk
+        ax = Integer(int.from_bytes(apk_bytes[:32], "big"))
+        ay = Integer(int.from_bytes(apk_bytes[32:], "big"))
+        apk = E(Fp(ax), Fp(ay))
+
+        # Deserialize R
+        rx = Integer(int.from_bytes(R_bytes[:32], "big"))
+        ry = Integer(int.from_bytes(R_bytes[32:], "big"))
+        R = E(Fp(rx), Fp(ry))
+
+        s0 = int.from_bytes(s0_bytes, "big")
+        s1 = int.from_bytes(s1_bytes, "big")
+
+        return apk, (R, (s0, s1))
+
+    def test_cpp_sign_python_ver_2(self):
+        result = fastmusig.run_protocol_sequential(2, b"cross test", seed=42)
+        apk, sigma = self._cpp_sigma_to_python(result)
+        assert ver(apk, b"cross test", sigma)
+
+    def test_cpp_sign_python_ver_3(self):
+        result = fastmusig.run_protocol_sequential(3, b"three", seed=100)
+        apk, sigma = self._cpp_sigma_to_python(result)
+        assert ver(apk, b"three", sigma)
+
+    def test_cpp_sign_python_ver_5(self):
+        result = fastmusig.run_protocol_sequential(5, b"five signers", seed=200)
+        apk, sigma = self._cpp_sigma_to_python(result)
+        assert ver(apk, b"five signers", sigma)
+
+    def test_cpp_sign_python_ver_10(self):
+        result = fastmusig.run_protocol_sequential(10, b"ten signers", seed=300)
+        apk, sigma = self._cpp_sigma_to_python(result)
+        assert ver(apk, b"ten signers", sigma)
