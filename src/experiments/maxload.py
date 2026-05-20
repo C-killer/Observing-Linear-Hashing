@@ -46,7 +46,7 @@ def _chunked(iterable: Iterable[int], chunk_size: int) -> Iterator[List[int]]:
     if buf:
         yield buf
 
-“””
+"""
 Replace “exact counting of all 2^l buckets” with “tracking only the few candidate buckets
 most likely to be the max bucket”, using the classic Space-Saving / Frequent algorithm
 (approximate heavy hitters).
@@ -57,7 +57,7 @@ estimated bucket when full. This fits the project's pain point where large l mak
 exact computation infeasible: we only need to estimate max-load (maximum bucket load),
 not output the exact count distribution. This makes max-load estimation streaming
 (single pass) with O(k) memory.
-“””
+"""
 class Maxload:
     """
     M(S,h) = max_y |{x in S : h(x)=y}|
